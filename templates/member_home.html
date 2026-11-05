@@ -1,0 +1,14 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Members</p>
+  <h1>Member area</h1>
+  <p>
+    Welcome, {{ current_user.full_name }}. Member resources will be added in a
+    later step.
+  </p>
+</section>
+<section class="empty-state">
+  <h2>More coming later</h2>
+  <p>This is the starting point for the private member area.</p>
+</section>
+{% endblock %}

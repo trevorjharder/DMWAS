@@ -1,0 +1,64 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Administration</p>
+  <h1>Member access requests</h1>
+  <p>
+    Review requests according to Society policy. The constitution supplied so
+    far does not set out membership eligibility or approval rules.
+  </p>
+</section>
+{% if pending_users %}
+<div class="request-list">
+  {% for member in pending_users %}
+  <article class="request-card">
+    <div>
+      <h2>{{ member.full_name }}</h2>
+      <p>
+        <a href="mailto:{{ member.email }}">{{ member.email }}</a>{% if
+        member.phone %} · {{ member.phone }}{% endif %}
+      </p>
+      <p>Username: <strong>{{ member.username }}</strong></p>
+      <p class="form-hint">
+        Requested {{ member.created_at.strftime('%Y-%m-%d') if member.created_at
+        else 'date unavailable' }}
+      </p>
+    </div>
+    <div class="request-actions">
+      <form
+        method="post"
+        action="{{ url_for('approve_request', user_id=member.id) }}"
+      >
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ session.get('csrf_token', '') }}"
+        />
+        <label class="check-label"
+          ><input
+            type="checkbox"
+            name="checks_confirmed"
+            value="yes"
+            required
+          />
+          I completed the Society's required checks for this request.</label
+        >
+        <button class="button button--primary" type="submit">Approve</button>
+      </form>
+      <form
+        method="post"
+        action="{{ url_for('decline_request', user_id=member.id) }}"
+      >
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ session.get('csrf_token', '') }}"
+        />
+        <button class="button button--danger" type="submit">Decline</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<section class="empty-state"><h2>No pending requests</h2></section>
+{% endif %} {% endblock %}

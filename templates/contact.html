@@ -1,0 +1,38 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Get in touch</p>
+  <h1>Contact the Society</h1>
+  <p>
+    For questions about the Society, outdoor access, or its purposes, use the
+    contact details below.
+  </p>
+</section>
+<section class="contact-card">
+  {% if config.PUBLIC_CONTACT_EMAIL %}
+  <p>
+    <strong>Email</strong><br /><a
+      href="mailto:{{ config.PUBLIC_CONTACT_EMAIL }}"
+      >{{ config.PUBLIC_CONTACT_EMAIL }}</a
+    >
+  </p>
+  {% endif %} {% if config.PUBLIC_CONTACT_PHONE %}
+  <p>
+    <strong>Phone</strong><br /><a href="tel:{{ config.PUBLIC_CONTACT_PHONE }}"
+      >{{ config.PUBLIC_CONTACT_PHONE }}</a
+    >
+  </p>
+  {% endif %} {% if config.PUBLIC_CONTACT_ADDRESS %}
+  <p>
+    <strong>Mailing address</strong><br />
+    {% for line in config.PUBLIC_CONTACT_ADDRESS.splitlines() %}{{ line }}{% if
+    not loop.last %}<br />{% endif %}{% endfor %}
+  </p>
+  {% endif %} {% if not config.PUBLIC_CONTACT_EMAIL and not
+  config.PUBLIC_CONTACT_PHONE and not config.PUBLIC_CONTACT_ADDRESS %}
+  <p>
+    Public contact details will be added after the Society confirms what should
+    be published.
+  </p>
+  {% endif %}
+</section>
+{% endblock %}

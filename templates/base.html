@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="District of Mount Waddington Access Society"
+    />
+    <title>
+      {{ title or "DMWAS" }} | District of Mount Waddington Access Society
+    </title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='styles.css') }}"
+    />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="{{ url_for('about') }}">
+        <span class="brand__mark" aria-hidden="true">DMWAS</span>
+        <span class="brand__name"
+          >District of Mount Waddington<br />Access Society</span
+        >
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="{{ url_for('about') }}">About</a>
+        <a href="{{ url_for('notices') }}">Notices</a>
+        <a href="{{ url_for('contact') }}">Contact</a>
+        {% if current_user and current_user.status == 'active' %}
+        <a href="{{ url_for('member_home') }}">Member area</a>
+        {% if current_user.is_admin %}<a href="{{ url_for('admin_requests') }}"
+          >Admin</a
+        >{% endif %}
+        <form class="nav-form" method="post" action="{{ url_for('logout') }}">
+          <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ session.get('csrf_token', '') }}"
+          />
+          <button class="nav-button" type="submit">Sign out</button>
+        </form>
+        {% else %}
+        <a class="nav-login" href="{{ url_for('login') }}">Member sign in</a>
+        {% endif %}
+      </nav>
+    </header>
+
+    <main id="main-content">
+      {% with messages = get_flashed_messages(with_categories=true) %} {% if
+      messages %}
+      <div class="flash-stack" role="status" aria-live="polite">
+        {% for category, message in messages %}
+        <div class="flash flash--{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+      {% endif %} {% endwith %} {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+      <span>District of Mount Waddington Access Society</span>
+      <a href="{{ url_for('contact') }}">Contact</a>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,42 @@
+{% extends "base.html" %} {% block content %}
+<section class="auth-layout">
+  <div class="auth-card">
+    <p class="eyebrow">Members</p>
+    <h1>Member sign in</h1>
+    <p>Sign in with an approved Society account.</p>
+    <form
+      method="post"
+      action="{{ url_for('login', next=request.args.get('next', '')) }}"
+    >
+      <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ session.get('csrf_token', '') }}"
+      />
+      <label for="username">Username</label>
+      <input
+        id="username"
+        name="username"
+        autocomplete="username"
+        required
+        maxlength="40"
+      />
+      <label for="password">Password</label>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autocomplete="current-password"
+        required
+      />
+      <button class="button button--primary button--full" type="submit">
+        Sign in
+      </button>
+    </form>
+    <p class="auth-card__footnote">
+      Need an account?
+      <a href="{{ url_for('membership_request') }}">Request member access</a>
+    </p>
+  </div>
+</section>
+{% endblock %}

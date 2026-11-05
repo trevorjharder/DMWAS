@@ -1,0 +1,73 @@
+{% extends "base.html" %} {% block content %}
+<section class="hero">
+  <p class="eyebrow">Outdoor access · Education · Stewardship</p>
+  <h1>Access to the outdoors in the Mount Waddington region</h1>
+  <p class="hero__intro">
+    The District of Mount Waddington Access Society is a society focused on
+    improving access to hiking, climbing, and mountaineering opportunities in
+    the region.
+  </p>
+  <div class="hero__actions">
+    <a class="button button--primary" href="{{ url_for('notices') }}"
+      >View notices</a
+    >
+    <a class="button button--secondary" href="{{ url_for('contact') }}"
+      >Contact the Society</a
+    >
+  </div>
+</section>
+
+<section class="content-section" aria-labelledby="purposes-heading">
+  <p class="eyebrow">Our purposes</p>
+  <h2 id="purposes-heading">Supporting responsible outdoor recreation</h2>
+  <p>The Society's constitution describes these purposes:</p>
+  <div class="purpose-grid">
+    <article class="purpose-card">
+      <h3>Access and trails</h3>
+      <p>
+        Promote, develop, improve, and maintain public access to hiking,
+        climbing, and mountaineering opportunities, including trails, wilderness
+        access routes, and climbing areas.
+      </p>
+    </article>
+    <article class="purpose-card">
+      <h3>Facilities and programs</h3>
+      <p>
+        Support community climbing facilities, recreational programs, and
+        infrastructure that facilitate safe and responsible outdoor recreation.
+      </p>
+    </article>
+    <article class="purpose-card">
+      <h3>Education and stewardship</h3>
+      <p>
+        Promote outdoor education, responsible recreation, conservation, and
+        stewardship of natural areas.
+      </p>
+    </article>
+    <article class="purpose-card">
+      <h3>Community participation</h3>
+      <p>
+        Encourage volunteering, reduce barriers to outdoor recreation, and
+        cooperate with governments, landowners, organizations, and other
+        stakeholders.
+      </p>
+    </article>
+    <article class="purpose-card">
+      <h3>Local knowledge and safety</h3>
+      <p>
+        Support community safety and emergency preparedness by sharing local
+        knowledge about wilderness terrain, trails, and access routes with
+        appropriate organizations and authorities.
+      </p>
+    </article>
+    <article class="purpose-card">
+      <h3>Education support</h3>
+      <p>
+        Support scholarships, grants, and financial assistance for outdoor
+        recreation, guiding, tourism, and related education, with an emphasis on
+        people who intend to contribute to the Mount Waddington region.
+      </p>
+    </article>
+  </div>
+</section>
+{% endblock %}

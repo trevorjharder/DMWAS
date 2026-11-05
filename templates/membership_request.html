@@ -1,0 +1,85 @@
+{% extends "base.html" %} {% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p class="eyebrow">Membership</p>
+    <h1>Request member access</h1>
+    <p>
+      Requests are reviewed by the Society. You will not be able to sign in
+      until access is approved.
+    </p>
+    <form method="post">
+      <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ session.get('csrf_token', '') }}"
+      />
+      <label for="full_name">Full name</label>
+      <input
+        id="full_name"
+        name="full_name"
+        autocomplete="name"
+        maxlength="120"
+        required
+        value="{{ request.form.get('full_name', '') }}"
+      />
+      <label for="email">Email</label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        autocomplete="email"
+        maxlength="254"
+        required
+        value="{{ request.form.get('email', '') }}"
+      />
+      <label for="phone"
+        >Phone number <span class="label-note">(optional)</span></label
+      >
+      <input
+        id="phone"
+        name="phone"
+        type="tel"
+        autocomplete="tel"
+        maxlength="40"
+        value="{{ request.form.get('phone', '') }}"
+      />
+      <label for="username">Choose a username</label>
+      <input
+        id="username"
+        name="username"
+        autocomplete="username"
+        minlength="3"
+        maxlength="40"
+        pattern="[A-Za-z0-9_.-]+"
+        required
+        value="{{ request.form.get('username', '') }}"
+      />
+      <label for="password">Choose a password</label>
+      <input
+        id="password"
+        name="password"
+        type="password"
+        autocomplete="new-password"
+        minlength="12"
+        required
+      />
+      <label for="confirm_password">Confirm password</label>
+      <input
+        id="confirm_password"
+        name="confirm_password"
+        type="password"
+        autocomplete="new-password"
+        minlength="12"
+        required
+      />
+      <p class="form-hint">
+        Passwords must be at least 12 characters. Requests are not active
+        accounts until approved.
+      </p>
+      <button class="button button--primary button--full" type="submit">
+        Submit access request
+      </button>
+    </form>
+  </div>
+</section>
+{% endblock %}
