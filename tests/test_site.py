@@ -1,7 +1,15 @@
 from werkzeug.security import check_password_hash
 
-from app import User, db
+from app import User, _database_uri, db
 from tests.conftest import login_as, set_csrf
+
+
+def test_postgres_urls_select_installed_psycopg2_driver(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@db.example.test:5432/society")
+    assert _database_uri() == "postgresql+psycopg2://user:pass@db.example.test:5432/society"
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example.test:5432/society")
+    assert _database_uri() == "postgresql+psycopg2://user:pass@db.example.test:5432/society"
 
 
 def test_public_pages_render(client):

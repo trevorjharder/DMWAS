@@ -61,7 +61,9 @@ class User(db.Model):
 def _database_uri() -> str:
     database_url = os.environ.get("DATABASE_URL", "sqlite:///dmwas.db")
     if database_url.startswith("postgres://"):
-        return database_url.replace("postgres://", "postgresql://", 1)
+        return database_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return database_url
 
 
