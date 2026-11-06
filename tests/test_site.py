@@ -123,6 +123,12 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
     assert response.status_code == 302
     assert response.location.endswith("/member")
     assert client.get("/member").status_code == 200
+    member_home = client.get("/member")
+    assert b"Resources" in member_home.data
+    assert b"Search Members" in member_home.data
+    assert b"Manage Members" not in member_home.data
+    assert client.get("/member/resources").status_code == 200
+    assert client.get("/members/search?q=Test").status_code == 200
 
 
 def test_non_admin_cannot_review_requests(client, app):
@@ -141,6 +147,40 @@ def test_non_admin_cannot_review_requests(client, app):
 
     login_as(client, member_id)
     assert client.get("/admin/requests").status_code == 403
+    assert client.get("/admin/members").status_code == 403
+    assert b"Manage Members" not in client.get("/member").data
+
+
+def test_admin_member_page_is_linked_and_lists_accounts(client, app):
+    with app.app_context():
+        admin = User(
+            full_name="Society administrator",
+            email="admin@example.test",
+            username="siteadmin",
+            status="active",
+            is_admin=True,
+        )
+        admin.set_password("Admin-Password-Here-1")
+        member = User(
+            full_name="Active Member",
+            email="active@example.test",
+            username="active-member",
+            status="active",
+        )
+        member.set_password("Active-Member-Password-1")
+        db.session.add_all([admin, member])
+        db.session.commit()
+        admin_id = admin.id
+
+    login_as(client, admin_id)
+    home = client.get("/member")
+    assert b"Manage Members" in home.data
+    assert b"Access Requests" in home.data
+
+    response = client.get("/admin/members")
+    assert response.status_code == 200
+    assert b"Active Member" in response.data
+    assert b"active@example.test" in response.data
 
 
 def test_invalid_access_request_does_not_create_user(client, app):

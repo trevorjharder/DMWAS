@@ -1,0 +1,45 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Administration</p>
+  <h1>Manage members</h1>
+  <p>Review member account details and their current access status.</p>
+</section>
+<section class="directory-section">
+  <div class="directory-heading">
+    <h2>Member accounts</h2>
+    <a class="button button--secondary" href="{{ url_for('admin_requests') }}"
+      >Review access requests</a
+    >
+  </div>
+  {% if members %}
+  <div class="table-scroll">
+    <table class="member-table">
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Email</th>
+          <th scope="col">Username</th>
+          <th scope="col">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for member in members %}
+        <tr>
+          <td>{{ member.full_name }}</td>
+          <td><a href="mailto:{{ member.email }}">{{ member.email }}</a></td>
+          <td>{{ member.username }}</td>
+          <td>
+            <span class="status-pill status-pill--{{ member.status }}"
+              >{{ member.status|capitalize }}</span
+            >
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><p>No member accounts to manage yet.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

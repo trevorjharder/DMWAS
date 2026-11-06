@@ -275,6 +275,34 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     def member_home():
         return render_template("member_home.html", title="Member area")
 
+    @app.get("/member/resources")
+    @login_required
+    def member_resources():
+        return render_template("member_resources.html", title="Member resources")
+
+    @app.get("/members/search")
+    @login_required
+    def member_search():
+        query = request.args.get("q", "").strip()
+        members = []
+        if query:
+            members = (
+                User.query.filter_by(status="active", is_admin=False)
+                .filter(User.full_name.ilike(f"%{query}%"))
+                .order_by(User.full_name)
+                .limit(50)
+                .all()
+            )
+        return render_template(
+            "member_search.html", title="Search members", query=query, members=members
+        )
+
+    @app.get("/admin/members")
+    @admin_required
+    def admin_members():
+        members = User.query.filter_by(is_admin=False).order_by(User.full_name).all()
+        return render_template("admin_members.html", title="Manage members", members=members)
+
     @app.get("/admin/requests")
     @admin_required
     def admin_requests():
