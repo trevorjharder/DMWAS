@@ -50,12 +50,68 @@
     request.endpoint or '' %}
     <nav class="member-nav" aria-label="Member navigation">
       <div class="member-nav__inner">
-        <a href="{{ url_for('member_home') }}" {% if endpoint == 'member_home' %}aria-current="page"{% endif %}>Member area</a>
-        <a href="{{ url_for('member_resources') }}" {% if endpoint == 'member_resources' %}aria-current="page"{% endif %}>Resources</a>
-        <a href="{{ url_for('member_search') }}" {% if endpoint == 'member_search' %}aria-current="page"{% endif %}>Search Members</a>
+        <a
+          href="{{ url_for('member_home') }}"
+          {%
+          if
+          endpoint=""
+          ="member_home"
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Member area</a
+        >
+        <a
+          href="{{ url_for('member_resources') }}"
+          {%
+          if
+          endpoint=""
+          ="member_resources"
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Resources</a
+        >
+        <a
+          href="{{ url_for('member_search') }}"
+          {%
+          if
+          endpoint=""
+          ="member_search"
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Search Members</a
+        >
         {% if current_user.is_admin %}
-        <a href="{{ url_for('admin_members') }}" {% if endpoint == 'admin_members' %}aria-current="page"{% endif %}>Manage Members</a>
-        <a href="{{ url_for('admin_requests') }}" {% if endpoint in ['admin_requests', 'approve_request', 'decline_request'] %}aria-current="page"{% endif %}>Access Requests</a>
+        <a
+          href="{{ url_for('admin_members') }}"
+          {%
+          if
+          endpoint=""
+          ="admin_members"
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Manage Members</a
+        >
+        <a
+          href="{{ url_for('admin_requests') }}"
+          {%
+          if
+          endpoint
+          in
+          ['admin_requests', 'approve_request', 'decline_request']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Access Requests</a
+        >
         {% endif %}
       </div>
     </nav>
