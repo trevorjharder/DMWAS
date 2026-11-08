@@ -16,15 +16,21 @@
     <table class="member-table">
       <thead>
         <tr>
+          <th scope="col">Member ID</th>
           <th scope="col">Name</th>
           <th scope="col">Email</th>
           <th scope="col">Username</th>
           <th scope="col">Status</th>
+          <th scope="col">Membership term</th>
+          <th scope="col">Dues / payment</th>
+          <th scope="col">Actions</th>
         </tr>
       </thead>
       <tbody>
-        {% for member in members %}
+        {% for member in members %} {% set term = latest_terms.get(member.id) %}
+        {% set history = membership_histories.get(member.id, []) %}
         <tr>
+          <td>{{ member.member_number }}</td>
           <td>{{ member.full_name }}</td>
           <td><a href="mailto:{{ member.email }}">{{ member.email }}</a></td>
           <td>{{ member.username }}</td>
@@ -32,6 +38,78 @@
             <span class="status-pill status-pill--{{ member.status }}"
               >{{ member.status|capitalize }}</span
             >
+          </td>
+          <td>
+            {% if term %} {{ term.membership_type|capitalize }}<br />
+            {{ term.start_date.strftime('%Y-%m-%d') }} – {{
+            term.expiry_date.strftime('%Y-%m-%d') }} {% if history %}<br />Member
+            since {{ history[0].start_date.strftime('%Y-%m-%d') }}{% endif %} {%
+            if history|length > 1 %}
+            <details>
+              <summary>Term history</summary>
+              <ol>
+                {% for prior_term in history %}
+                <li>
+                  {{ prior_term.start_date.strftime('%Y-%m-%d') }} – {{
+                  prior_term.expiry_date.strftime('%Y-%m-%d') }} · {{
+                  prior_term.status|capitalize }} · ${{
+                  '%.2f'|format(prior_term.annual_dues_cents / 100) }} ({{
+                  prior_term.payment_status }})
+                </li>
+                {% endfor %}
+              </ol>
+            </details>
+            {% endif %} {% else %}Not approved{% endif %}
+          </td>
+          <td>
+            {% if term %} ${{ '%.2f'|format(term.annual_dues_cents / 100) }} ·
+            {{ term.payment_status|capitalize }} {% if term.payment_date %}<br />Paid
+            {{ term.payment_date.strftime('%Y-%m-%d') }}{% endif %} {% else
+            %}—{% endif %}
+          </td>
+          <td>
+            {% if term and term.payment_status == 'unpaid' %}
+            <form
+              method="post"
+              action="{{ url_for('record_membership_payment', user_id=member.id) }}"
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <label for="payment_reference_{{ member.id }}"
+                >Payment reference
+                <span class="label-note">(optional)</span></label
+              >
+              <input
+                id="payment_reference_{{ member.id }}"
+                name="payment_reference"
+                maxlength="255"
+              />
+              <button class="button button--secondary" type="submit">
+                Record payment
+              </button>
+            </form>
+            {% endif %} {% if member.status == 'expired' %}
+            <form
+              method="post"
+              action="{{ url_for('renew_membership', user_id=member.id) }}"
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <button class="button button--primary" type="submit">
+                Renew one-year term
+              </button>
+            </form>
+            {% endif %} {% if term and term.voting_eligible is none %}
+            <p class="form-hint">
+              Voting eligibility not set (requires bylaws rule).
+            </p>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}

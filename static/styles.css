@@ -398,6 +398,39 @@ h3 {
   color: var(--ink);
   font: inherit;
 }
+.auth-card input[type="radio"],
+.auth-card input[type="checkbox"] {
+  width: auto;
+  min-height: 0;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.auth-card textarea {
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #bac7bd;
+  border-radius: 0.4rem;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+.form-options {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+}
+.form-options legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+}
+.form-options .check-label {
+  margin: 0;
+}
 .auth-card input:focus {
   outline: 3px solid #9fc2b3;
   outline-offset: 1px;

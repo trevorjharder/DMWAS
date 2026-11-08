@@ -7,7 +7,7 @@ import os
 import re
 import secrets
 import smtplib
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
@@ -56,6 +56,140 @@ class User(db.Model):
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def member_number(self) -> str:
+        return f"DMWAS-{self.id:06d}" if self.id is not None else "Pending"
+
+
+class MembershipDetails(db.Model):
+    """Membership application details kept separate from account credentials."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
+    first_name = db.Column(db.String(60), nullable=False)
+    last_name = db.Column(db.String(60), nullable=False)
+    community = db.Column(db.String(120), nullable=False)
+    date_of_birth = db.Column(db.Date, nullable=False)
+    age_19_or_older = db.Column(db.Boolean, nullable=False)
+    mailing_address = db.Column(db.String(500), nullable=False)
+    membership_type = db.Column(db.String(20), nullable=False)
+    activities = db.Column(db.JSON, nullable=False, default=list)
+    user = db.relationship("User", backref=db.backref("membership_details", uselist=False))
+
+
+MEMBERSHIP_ACTIVITIES = (
+    "Rock climbing",
+    "Bouldering",
+    "Hiking",
+    "Mountaineering",
+    "Trail development and maintenance",
+    "Outdoor education",
+)
+VOLUNTEER_INTERESTS = (
+    "Indoor climbing wall operations",
+    "Outdoor trail maintenance",
+    "Climbing route development",
+    "Fundraising and community events",
+    "Administrative or organizational work",
+)
+CONSENT_VERSIONS = {
+    "membership_support": "membership-support-v1",
+    "approval_understanding": "approval-understanding-v1",
+    "privacy_acknowledgement": "privacy-acknowledgement-v1",
+    "essential_communications": "essential-communications-v1",
+    "newsletter": "newsletter-v1",
+    "volunteer_contact": "volunteer-contact-v1",
+    "guardian_consent": "guardian-consent-v1",
+}
+
+
+class MembershipPreferences(db.Model):
+    """Volunteer preferences and contact details for an application."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
+    volunteer_interest = db.Column(db.Boolean, nullable=False)
+    volunteer_interests = db.Column(db.JSON, nullable=False, default=list)
+    volunteer_contact_ok = db.Column(db.Boolean, nullable=False, default=False)
+    newsletter_opt_in = db.Column(db.Boolean, nullable=False, default=False)
+    guardian_name = db.Column(db.String(120), nullable=True)
+    guardian_email = db.Column(db.String(254), nullable=True)
+    user = db.relationship("User", backref=db.backref("membership_preferences", uselist=False))
+
+
+class MembershipConsent(db.Model):
+    """Versioned records of required acknowledgements and optional consent choices."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    consent_type = db.Column(db.String(50), nullable=False)
+    version = db.Column(db.String(80), nullable=False)
+    granted = db.Column(db.Boolean, nullable=False)
+    consented_by = db.Column(db.String(120), nullable=True)
+    contact_email = db.Column(db.String(254), nullable=True)
+    accepted_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    user = db.relationship("User", backref=db.backref("consent_records", lazy="select"))
+
+
+class MembershipTerm(db.Model):
+    """An immutable-ish record for each membership term, including renewals."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    term_number = db.Column(db.Integer, nullable=False)
+    membership_type = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="active", index=True)
+    approval_date = db.Column(db.Date, nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    expiry_date = db.Column(db.Date, nullable=False)
+    annual_dues_cents = db.Column(db.Integer, nullable=False)
+    payment_status = db.Column(db.String(20), nullable=False)
+    payment_date = db.Column(db.Date, nullable=True)
+    payment_reference = db.Column(db.String(255), nullable=True)
+    voting_eligible = db.Column(db.Boolean, nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    user = db.relationship("User", backref=db.backref("membership_terms", lazy="select"))
+    __table_args__ = (db.UniqueConstraint("user_id", "term_number"),)
+
+
+def _one_year_after(day: date) -> date:
+    try:
+        return day.replace(year=day.year + 1)
+    except ValueError:
+        return day.replace(year=day.year + 1, day=28)
+
+
+def _expire_membership_if_due(user: User, today: date | None = None) -> bool:
+    if user.status != "active":
+        return False
+    latest_term = (
+        MembershipTerm.query.filter_by(user_id=user.id)
+        .order_by(MembershipTerm.term_number.desc())
+        .first()
+    )
+    if not latest_term or (today or date.today()) <= latest_term.expiry_date:
+        return False
+    latest_term.status = "expired"
+    user.status = "expired"
+    return True
+
+
+def _is_19_or_older(birth_date: date, today: date | None = None) -> bool:
+    today = today or date.today()
+    age = today.year - birth_date.year - (
+        (today.month, today.day) < (birth_date.month, birth_date.day)
+    )
+    return age >= 19
 
 
 def _database_uri() -> str:
@@ -138,6 +272,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     def load_current_user() -> None:
         user_id = session.get("user_id")
         g.current_user = db.session.get(User, user_id) if user_id else None
+        user = g.current_user
+        if user and _expire_membership_if_due(user):
+            db.session.commit()
 
     @app.context_processor
     def inject_template_values() -> dict[str, object]:
@@ -190,12 +327,18 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     def contact():
         return render_template("contact.html", title="Contact")
 
+    @app.get("/privacy")
+    def privacy():
+        return render_template("privacy.html", title="Privacy information")
+
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
             username = request.form.get("username", "").strip().lower()
             password = request.form.get("password", "")
             user = User.query.filter_by(username=username).first()
+            if user and _expire_membership_if_due(user):
+                db.session.commit()
             if user and user.status == "active" and user.check_password(password):
                 session.clear()
                 session["user_id"] = user.id
@@ -210,20 +353,86 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @app.route("/membership/request", methods=["GET", "POST"])
     def membership_request():
         if request.method == "POST":
-            full_name = request.form.get("full_name", "").strip()
+            first_name = request.form.get("first_name", "").strip()
+            last_name = request.form.get("last_name", "").strip()
             email = request.form.get("email", "").strip().lower()
             phone = request.form.get("phone", "").strip()
+            community = request.form.get("community", "").strip()
+            date_of_birth_value = request.form.get("date_of_birth", "").strip()
+            age_19_or_older_value = request.form.get("age_19_or_older", "")
+            mailing_address = request.form.get("mailing_address", "").strip()
+            membership_type = request.form.get("membership_type", "")
+            activities = request.form.getlist("activities")
+            volunteer_choices = request.form.getlist("volunteer_interests")
+            volunteer_interest = any(
+                choice in VOLUNTEER_INTERESTS for choice in volunteer_choices
+            )
+            volunteer_contact_value = request.form.get("volunteer_contact_ok", "")
+            newsletter_opt_in = request.form.get("newsletter_opt_in") == "yes"
+            acknowledgements = {
+                "membership_support": request.form.get("agree_membership_support") == "yes",
+                "approval_understanding": request.form.get("acknowledge_approval") == "yes",
+                "privacy_acknowledgement": request.form.get("acknowledge_privacy") == "yes",
+                "essential_communications": request.form.get("essential_communications") == "yes",
+            }
+            guardian_name = request.form.get("guardian_name", "").strip()
+            guardian_email = request.form.get("guardian_email", "").strip().lower()
+            guardian_consent = request.form.get("guardian_consent") == "yes"
             username = request.form.get("username", "").strip().lower()
             password = request.form.get("password", "")
             confirm_password = request.form.get("confirm_password", "")
 
             errors: list[str] = []
-            if not full_name or len(full_name) > 120:
-                errors.append("Enter your name (up to 120 characters).")
+            if not first_name or len(first_name) > 60:
+                errors.append("Enter your first name (up to 60 characters).")
+            if not last_name or len(last_name) > 60:
+                errors.append("Enter your last name (up to 60 characters).")
             if not EMAIL_PATTERN.fullmatch(email):
                 errors.append("Enter a valid email address.")
-            if phone and len(phone) > 40:
-                errors.append("The phone number must be 40 characters or fewer.")
+            if not phone or len(phone) > 40:
+                errors.append("Enter a phone number of 40 characters or fewer.")
+            if not community or len(community) > 120:
+                errors.append("Enter your community of residence (up to 120 characters).")
+            try:
+                date_of_birth = date.fromisoformat(date_of_birth_value)
+                if date_of_birth > date.today():
+                    raise ValueError
+            except ValueError:
+                date_of_birth = None
+                errors.append("Enter a valid date of birth that is not in the future.")
+            if age_19_or_older_value not in {"yes", "no"}:
+                errors.append("Confirm whether you are 19 or older.")
+            if not mailing_address or len(mailing_address) > 500:
+                errors.append("Enter your mailing address (up to 500 characters).")
+            if membership_type not in {"adult", "youth"}:
+                errors.append("Select an adult or youth membership.")
+            if any(activity not in MEMBERSHIP_ACTIVITIES for activity in activities):
+                errors.append("Select only activities from the list.")
+            if any(
+                choice != "not_at_this_time" and choice not in VOLUNTEER_INTERESTS
+                for choice in volunteer_choices
+            ):
+                errors.append("Select only volunteer interests from the list.")
+            if "not_at_this_time" in volunteer_choices and len(volunteer_choices) > 1:
+                errors.append("Select “Not at this time” by itself, or choose volunteer activities.")
+            if volunteer_contact_value not in {"yes", "no"}:
+                errors.append("Choose whether you would like to be contacted about volunteer opportunities.")
+            if not all(acknowledgements.values()):
+                errors.append("Accept all required membership and communication acknowledgements to apply.")
+            if date_of_birth and age_19_or_older_value in {"yes", "no"}:
+                is_adult = _is_19_or_older(date_of_birth)
+                if (age_19_or_older_value == "yes") != is_adult:
+                    errors.append("Your age confirmation does not match your date of birth.")
+                expected_membership = "adult" if is_adult else "youth"
+                if membership_type != expected_membership:
+                    errors.append("Your membership type must match your age: adults are 19 or older; youth are under 19.")
+                if not is_adult:
+                    if not guardian_name or len(guardian_name) > 120:
+                        errors.append("A parent or guardian must provide their name for a youth application.")
+                    if not EMAIL_PATTERN.fullmatch(guardian_email):
+                        errors.append("A parent or guardian must provide a valid email address for a youth application.")
+                    if not guardian_consent:
+                        errors.append("A parent or guardian must confirm consent for a youth application.")
             if not re.fullmatch(r"[a-z0-9_.-]{3,40}", username):
                 errors.append("Choose a username of 3–40 letters, numbers, dots, underscores, or hyphens.")
             if len(password) < MIN_PASSWORD_LENGTH:
@@ -236,32 +445,72 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             if errors:
                 for error in errors:
                     flash(error, "error")
-                return render_template("membership_request.html", title="Request member access"), 400
+                return render_template("membership_request.html", title="Membership application"), 400
 
+            assert date_of_birth is not None
+            full_name = f"{first_name} {last_name}"
             user = User(
                 full_name=full_name,
                 email=email,
-                phone=phone or None,
+                phone=phone,
                 username=username,
                 status="pending",
             )
             user.set_password(password)
+            user.membership_details = MembershipDetails(
+                first_name=first_name,
+                last_name=last_name,
+                community=community,
+                date_of_birth=date_of_birth,
+                age_19_or_older=age_19_or_older_value == "yes",
+                mailing_address=mailing_address,
+                membership_type=membership_type,
+                activities=activities,
+            )
+            user.membership_preferences = MembershipPreferences(
+                volunteer_interest=volunteer_interest,
+                volunteer_interests=[
+                    choice for choice in volunteer_choices if choice in VOLUNTEER_INTERESTS
+                ],
+                volunteer_contact_ok=volunteer_contact_value == "yes",
+                newsletter_opt_in=newsletter_opt_in,
+                guardian_name=guardian_name or None,
+                guardian_email=guardian_email or None,
+            )
+            consent_grants = {
+                **acknowledgements,
+                "newsletter": newsletter_opt_in,
+                "volunteer_contact": volunteer_contact_value == "yes",
+            }
+            if not _is_19_or_older(date_of_birth):
+                consent_grants["guardian_consent"] = guardian_consent
+            for consent_type, granted in consent_grants.items():
+                user.consent_records.append(
+                    MembershipConsent(
+                        consent_type=consent_type,
+                        version=CONSENT_VERSIONS[consent_type],
+                        granted=granted,
+                        consented_by=guardian_name if consent_type == "guardian_consent" else None,
+                        contact_email=guardian_email if consent_type == "guardian_consent" else None,
+                        accepted_at=datetime.now(timezone.utc),
+                    )
+                )
             db.session.add(user)
             try:
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
                 flash("That email or username cannot be used. Contact the Society if you already requested access.", "error")
-                return render_template("membership_request.html", title="Request member access"), 400
+                return render_template("membership_request.html", title="Membership application"), 400
 
             try:
                 _send_request_notification(user)
             except (OSError, smtplib.SMTPException, ValueError):
                 app.logger.exception("Could not send membership request notification")
-            flash("Your request has been received. Sign-in will be available after Society approval.", "success")
+            flash("Your membership application has been received. Sign-in will be available after Society approval.", "success")
             return redirect(url_for("login"))
 
-        return render_template("membership_request.html", title="Request member access")
+        return render_template("membership_request.html", title="Membership application")
 
     @app.post("/logout")
     @login_required
@@ -301,7 +550,26 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @admin_required
     def admin_members():
         members = User.query.filter_by(is_admin=False).order_by(User.full_name).all()
-        return render_template("admin_members.html", title="Manage members", members=members)
+        expired_membership = False
+        for member in members:
+            expired_membership = _expire_membership_if_due(member) or expired_membership
+        if expired_membership:
+            db.session.commit()
+        terms = MembershipTerm.query.order_by(
+            MembershipTerm.user_id, MembershipTerm.term_number
+        ).all()
+        latest_terms = {}
+        membership_histories = {}
+        for term in terms:
+            latest_terms[term.user_id] = term
+            membership_histories.setdefault(term.user_id, []).append(term)
+        return render_template(
+            "admin_members.html",
+            title="Manage members",
+            members=members,
+            latest_terms=latest_terms,
+            membership_histories=membership_histories,
+        )
 
     @app.get("/admin/requests")
     @admin_required
@@ -318,6 +586,26 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         if request.form.get("checks_confirmed") != "yes":
             flash("Confirm that the Society's required checks are complete before approving.", "error")
             return redirect(url_for("admin_requests"))
+        today = date.today()
+        details = user.membership_details
+        membership_type = details.membership_type if details else "legacy"
+        annual_dues_cents = 1000 if membership_type == "adult" else 0
+        payment_status = "unpaid" if annual_dues_cents else "waived"
+        previous_terms = MembershipTerm.query.filter_by(user_id=user.id).all()
+        term_number = max((term.term_number for term in previous_terms), default=0) + 1
+        user.membership_terms.append(
+            MembershipTerm(
+                term_number=term_number,
+                membership_type=membership_type,
+                status="active",
+                approval_date=today,
+                start_date=today,
+                expiry_date=_one_year_after(today),
+                annual_dues_cents=annual_dues_cents,
+                payment_status=payment_status,
+                voting_eligible=None,
+            )
+        )
         user.status = "active"
         db.session.commit()
         flash(f"Access approved for {user.username}.", "success")
@@ -329,10 +617,72 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         user = db.session.get(User, user_id)
         if not user or user.is_admin or user.status != "pending":
             abort(404)
-        user.status = "declined"
+        user.status = "rejected"
         db.session.commit()
         flash("The access request was declined.", "success")
         return redirect(url_for("admin_requests"))
+
+    @app.post("/admin/members/<int:user_id>/membership/payment")
+    @admin_required
+    def record_membership_payment(user_id: int):
+        user = db.session.get(User, user_id)
+        if not user or user.is_admin:
+            abort(404)
+        term = (
+            MembershipTerm.query.filter_by(user_id=user.id)
+            .order_by(MembershipTerm.term_number.desc())
+            .first()
+        )
+        if _expire_membership_if_due(user):
+            db.session.commit()
+        if (
+            not term
+            or term.status != "active"
+            or user.status != "active"
+            or term.payment_status != "unpaid"
+        ):
+            abort(404)
+        payment_reference = request.form.get("payment_reference", "").strip()
+        if len(payment_reference) > 255:
+            flash("Payment reference must be 255 characters or fewer.", "error")
+            return redirect(url_for("admin_members"))
+        term.payment_status = "paid"
+        term.payment_date = date.today()
+        term.payment_reference = payment_reference or None
+        db.session.commit()
+        flash(f"Payment recorded for {user.member_number}.", "success")
+        return redirect(url_for("admin_members"))
+
+    @app.post("/admin/members/<int:user_id>/membership/renew")
+    @admin_required
+    def renew_membership(user_id: int):
+        user = db.session.get(User, user_id)
+        if not user or user.is_admin or user.status != "expired":
+            abort(404)
+        today = date.today()
+        prior_terms = MembershipTerm.query.filter_by(user_id=user.id).all()
+        latest_term = max(prior_terms, key=lambda term: term.term_number, default=None)
+        if not latest_term:
+            abort(404)
+        membership_type = latest_term.membership_type
+        annual_dues_cents = 1000 if membership_type == "adult" else 0
+        user.membership_terms.append(
+            MembershipTerm(
+                term_number=latest_term.term_number + 1,
+                membership_type=membership_type,
+                status="active",
+                approval_date=today,
+                start_date=today,
+                expiry_date=_one_year_after(today),
+                annual_dues_cents=annual_dues_cents,
+                payment_status="unpaid" if annual_dues_cents else "waived",
+                voting_eligible=None,
+            )
+        )
+        user.status = "active"
+        db.session.commit()
+        flash(f"Membership renewed for {user.member_number}.", "success")
+        return redirect(url_for("admin_members"))
 
     @app.cli.command("init-db")
     def init_db_command() -> None:

@@ -5,7 +5,8 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 ## Current first-step features
 
 - Public About, Notices, and Contact pages.
-- Member access requests with hashed passwords; requests remain pending until an administrator approves them.
+- Membership applications with hashed passwords, contact and membership details, and pending approval until an administrator approves them.
+- Optional volunteer and newsletter preferences, versioned consent records, and membership term/payment history.
 - Member sign-in and a placeholder private member landing page.
 - A protected admin page to approve or decline pending requests.
 - Optional email notification to `members@accessni.ca` when SMTP is configured.
@@ -34,7 +35,10 @@ The local default database is `dmwas.db` in the project directory. Keep database
 - Set `SESSION_COOKIE_SECURE=true` when the service is served over HTTPS.
 - Deploy this repository; the included `Procfile` starts Gunicorn.
 - Run `flask --app app init-db` for a new database, then create the initial admin using `flask --app app create-admin` in an authenticated Railway shell. Do not expose administrator signup publicly.
+- After deploying the expanded membership application, run `flask --app app init-db` once in the Railway shell. It creates the new preference, consent, and term-history tables on an existing database; it is safe to rerun and does not alter or delete existing tables.
 - Connect `accessNI.ca` in Railway and follow its current domain/DNS instructions. Verify HTTPS before launch.
+
+The membership application stores date of birth, mailing address, and (for youth applications) parent/guardian contact details. Review and adopt the draft Privacy Information page before collecting this information publicly. Adult/youth eligibility is calculated from date of birth as of the application date; the form does not process the $10 adult membership payment.
 
 ### Optional SMTP notifications
 
@@ -46,7 +50,13 @@ Set any approved public details using `PUBLIC_CONTACT_EMAIL`, `PUBLIC_CONTACT_PH
 
 ## Membership workflow and outstanding decisions
 
-Applicants provide their name, email, optional phone number, username, and password. Passwords are stored as hashes. An account is unable to sign in until an administrator approves it. The admin screen asks the reviewer to confirm that the Society's required checks have been completed.
+Applicants provide their name, email, phone number, community, date of birth, mailing address, membership choice, and account credentials. Youth applicants must provide parent/guardian details and an on-form consent attestation; the application does not independently verify the guardian's identity. Passwords are stored as hashes. An account is unable to sign in until an administrator approves it. The admin screen asks the reviewer to confirm that the Society's required checks have been completed.
+
+Optional newsletter consent and volunteer-opportunity contact consent are recorded separately from essential membership communications. Each declaration and optional preference is recorded with a version and timestamp. The Society must provide a process for changing or withdrawing optional preferences before sending those messages.
+
+Approving a new application creates a one-year membership term. Adult dues are recorded as $10 unpaid until an administrator records payment; youth dues are recorded as waived. Admins can record a payment/reference and renew expired terms. Term history preserves prior start dates for eligibility review. Voting eligibility is left unset because the applicable bylaw rule has not been configured. The generated member number is based on the account's primary key.
+
+The `/privacy` page is a draft disclosure, not a substitute for Society-approved privacy policy. Before launch, approve the notice, retention schedule, privacy contact, guardian-consent process, and the rules for membership terms and director voting eligibility. Application acknowledgements are not recreational waivers.
 
 The constitution supplied so far contains the Society name and purposes, but does not state membership eligibility, dues, payment confirmation, or approval authority. Before public launch, confirm the Society's membership and approval policy and adjust the access request and admin review flow to match. Dues are not collected online. Declined-request retention/reapplication rules and password recovery are also not yet decided.
 
