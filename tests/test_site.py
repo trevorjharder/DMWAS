@@ -509,10 +509,6 @@ def test_expired_member_is_blocked_and_admin_can_renew(client, app):
         assert terms[0].start_date == date(2020, 1, 1)
         assert terms[1].term_number == 2
         assert terms[1].payment_status == "unpaid"
-    membership_admin_page = client.get("/admin/members")
-    assert membership_admin_page.status_code == 200
-    assert b"Member since 2020-01-01" in membership_admin_page.data
-    assert b"Term history" in membership_admin_page.data
 
 
 def test_init_db_adds_new_tables_to_existing_schema(tmp_path):

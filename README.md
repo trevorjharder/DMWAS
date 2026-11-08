@@ -34,8 +34,8 @@ The local default database is `dmwas.db` in the project directory. Keep database
 - Set a stable, private `SECRET_KEY` in Railway variables. Do not rely on the local fallback in production, especially with multiple Gunicorn workers.
 - Set `SESSION_COOKIE_SECURE=true` when the service is served over HTTPS.
 - Deploy this repository; the included `Procfile` starts Gunicorn.
-- Run `flask --app app init-db` for a new database, then create the initial admin using `flask --app app create-admin` in an authenticated Railway shell. Do not expose administrator signup publicly.
-- After deploying the expanded membership application, run `flask --app app init-db` once in the Railway shell. It creates the new preference, consent, and term-history tables on an existing database; it is safe to rerun and does not alter or delete existing tables.
+- The Procfile runs `flask --app app init-db` before Gunicorn starts. It creates missing tables on a new or existing database and is safe to rerun; it does not alter or delete existing tables. Confirm Railway's Start Command is unset or uses the repository Procfile so this initialization runs on every deployment.
+- Create the initial admin using `flask --app app create-admin` in an authenticated Railway shell. Do not expose administrator signup publicly.
 - Connect `accessNI.ca` in Railway and follow its current domain/DNS instructions. Verify HTTPS before launch.
 
 The membership application stores date of birth, mailing address, and (for youth applications) parent/guardian contact details. Review and adopt the draft Privacy Information page before collecting this information publicly. Adult/youth eligibility is calculated from date of birth as of the application date; the form does not process the $10 adult membership payment.
