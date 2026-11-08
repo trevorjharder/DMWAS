@@ -54,8 +54,9 @@
           href="{{ url_for('member_home') }}"
           {%
           if
-          endpoint=""
-          ="member_home"
+          endpoint
+          in
+          ['member_home']
           %}aria-current="page"
           {%
           endif
@@ -66,8 +67,9 @@
           href="{{ url_for('member_resources') }}"
           {%
           if
-          endpoint=""
-          ="member_resources"
+          endpoint
+          in
+          ['member_resources']
           %}aria-current="page"
           {%
           endif
@@ -78,8 +80,9 @@
           href="{{ url_for('member_search') }}"
           {%
           if
-          endpoint=""
-          ="member_search"
+          endpoint
+          in
+          ['member_search']
           %}aria-current="page"
           {%
           endif
@@ -91,8 +94,9 @@
           href="{{ url_for('admin_members') }}"
           {%
           if
-          endpoint=""
-          ="admin_members"
+          endpoint
+          in
+          ['admin_members']
           %}aria-current="page"
           {%
           endif
