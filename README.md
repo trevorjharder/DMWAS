@@ -34,7 +34,7 @@ The local default database is `dmwas.db` in the project directory. Keep database
 - Set a stable, private `SECRET_KEY` in Railway variables. Do not rely on the local fallback in production, especially with multiple Gunicorn workers.
 - Set `SESSION_COOKIE_SECURE=true` when the service is served over HTTPS.
 - Deploy this repository; the included `Procfile` starts Gunicorn.
-- The Procfile runs `flask --app app init-db` before Gunicorn starts. It creates missing tables on a new or existing database and is safe to rerun; it does not alter or delete existing tables. Confirm Railway's Start Command is unset or uses the repository Procfile so this initialization runs on every deployment.
+- The Procfile runs `flask --app app init-db` before Gunicorn starts. The app also creates missing tables on its first request as a fallback if Railway overrides the Procfile. Both paths are additive and safe to rerun; they do not alter or delete existing tables. Confirm Railway's Start Command is unset or uses the repository Procfile.
 - Create the initial admin using `flask --app app create-admin` in an authenticated Railway shell. Do not expose administrator signup publicly.
 - Connect `accessNI.ca` in Railway and follow its current domain/DNS instructions. Verify HTTPS before launch.
 

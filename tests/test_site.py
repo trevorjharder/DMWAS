@@ -528,3 +528,13 @@ def test_init_db_adds_new_tables_to_existing_schema(tmp_path):
     with legacy_app.app_context():
         table_names = set(inspect(db.engine).get_table_names())
         assert {"membership_preferences", "membership_consent", "membership_term"} <= table_names
+
+
+def test_first_request_creates_missing_membership_tables(client, app):
+    with app.app_context():
+        MembershipTerm.__table__.drop(db.engine)
+
+    response = client.get("/")
+    assert response.status_code == 302
+    with app.app_context():
+        assert inspect(db.engine).has_table("membership_term")

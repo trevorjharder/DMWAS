@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import smtplib
+import threading
 from datetime import date, datetime, timezone
 from email.message import EmailMessage
 from functools import wraps
@@ -26,6 +27,7 @@ from flask import (
     url_for,
 )
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -258,6 +260,28 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         app.config.update(test_config)
 
     db.init_app(app)
+    schema_lock = threading.Lock()
+    schema_initialized = False
+
+    @app.before_request
+    def initialize_missing_tables() -> None:
+        nonlocal schema_initialized
+        if schema_initialized:
+            return
+        with schema_lock:
+            if schema_initialized:
+                return
+            if db.engine.dialect.name == "postgresql":
+                # Serialize first-request setup across Gunicorn worker processes.
+                with db.engine.begin() as connection:
+                    connection.execute(
+                        text("SELECT pg_advisory_xact_lock(:key)"),
+                        {"key": 4839628471201},
+                    )
+                    db.metadata.create_all(bind=connection)
+            else:
+                db.create_all()
+            schema_initialized = True
 
     @app.before_request
     def protect_post_requests() -> None:
