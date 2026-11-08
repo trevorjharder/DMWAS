@@ -66,6 +66,11 @@ def test_membership_application_form_shows_requested_fields(client):
         b"I would like to receive newsletters",
         b"I agree to support the purposes",
         b"Parent or guardian consent for applicants under 19",
+        b"Adult membership dues are $10 per year",
+        b"Interac",
+        b"membership@accessni.ca",
+        b"Adult membership will not be approved until payment has been received",
+        b"Youth membership is free",
     ):
         assert field in response.data
     assert b"Are you 19 or older?" not in response.data
@@ -190,7 +195,9 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
         member_id = member.id
 
     login_as(client, admin_id)
-    assert client.get("/admin/requests").status_code == 200
+    requests_page = client.get("/admin/requests")
+    assert requests_page.status_code == 200
+    assert b"confirming adult dues were received when applicable" in requests_page.data
     response = client.post(
         f"/admin/requests/{member_id}/approve",
         data={"csrf_token": "test-csrf-token"},
