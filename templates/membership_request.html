@@ -85,11 +85,7 @@
       />
 
       <h2>Membership information</h2>
-      <fieldset
-        class="form-options"
-        id="guardian-consent-section"
-        {% if request.form.get('membership_type') != 'youth' %}hidden{% endif %}
-      >
+      <fieldset class="form-options">
         <legend>Select your membership type</legend>
         <label class="check-label">
           <input type="radio" name="membership_type" value="adult" required {% if request.form.get('membership_type') == 'adult' %}checked{% endif %} />
@@ -163,7 +159,11 @@
         I acknowledge that my personal information will be collected and used to administer my membership as described in the <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">privacy information</a>.
       </label>
 
-      <fieldset class="form-options">
+      <fieldset
+        class="form-options"
+        id="guardian-consent-section"
+        {% if request.form.get('membership_type') != 'youth' %}hidden{% endif %}
+      >
         <legend>Parent or guardian consent for applicants under 19</legend>
         <p class="form-hint">Required for youth applicants. A parent or guardian must provide their contact details and confirm consent.</p>
         <label for="guardian_name">Parent or guardian name</label>

@@ -21,6 +21,7 @@
           <th scope="col">Email</th>
           <th scope="col">Username</th>
           <th scope="col">Status</th>
+          <th scope="col">Voting eligibility</th>
           <th scope="col">Membership term</th>
           <th scope="col">Dues / payment</th>
           <th scope="col">Actions</th>
@@ -30,7 +31,11 @@
         {% for member in members %} {% set term = latest_terms.get(member.id) %}
         {% set history = membership_histories.get(member.id, []) %}
         <tr>
-          <td>{{ member.member_number }}</td>
+          <td>
+            <a href="{{ url_for('admin_member_detail', user_id=member.id) }}">
+              {{ member.member_number }}
+            </a>
+          </td>
           <td>{{ member.full_name }}</td>
           <td><a href="mailto:{{ member.email }}">{{ member.email }}</a></td>
           <td>{{ member.username }}</td>
@@ -38,6 +43,15 @@
             <span class="status-pill status-pill--{{ member.status }}"
               >{{ member.status|capitalize }}</span
             >
+          </td>
+          <td>
+            {% if voting_eligibility.get(member.id) is none %} Cannot determine
+            — date of birth not on file {% elif
+            voting_eligibility.get(member.id) %} Eligible to vote {% else %} Not
+            eligible to vote {% endif %}
+            <p class="form-hint">
+              Eligible when age 19 or older and account is approved.
+            </p>
           </td>
           <td>
             {% if term %} {{ term.membership_type|capitalize }}<br />
@@ -105,11 +119,44 @@
                 Renew one-year term
               </button>
             </form>
-            {% endif %} {% if term and term.voting_eligible is none %}
-            <p class="form-hint">
-              Voting eligibility not set (requires bylaws rule).
-            </p>
+            {% endif %} {% if member.status == 'active' %}
+            <form
+              method="post"
+              action="{{ url_for('make_member_admin', user_id=member.id) }}"
+              onsubmit="
+                return confirm(
+                  'Grant administrator access to this member? They will be able to manage all member records and access requests.',
+                );
+              "
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <button class="button button--secondary" type="submit">
+                Make administrator
+              </button>
+            </form>
             {% endif %}
+            <form
+              method="post"
+              action="{{ url_for('delete_member', user_id=member.id) }}"
+              onsubmit="
+                return confirm(
+                  'WARNING: Permanently delete this member and all associated membership, payment, consent, and account data? This cannot be undone.',
+                );
+              "
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <button class="button button--danger" type="submit">
+                Permanently delete member
+              </button>
+            </form>
           </td>
         </tr>
         {% endfor %}
@@ -118,6 +165,21 @@
   </div>
   {% else %}
   <div class="empty-state"><p>No member accounts to manage yet.</p></div>
+  {% endif %}
+</section>
+<section class="directory-section">
+  <h2>Administrators</h2>
+  {% if administrators %}
+  <ul>
+    {% for administrator in administrators %}
+    <li>
+      {{ administrator.full_name }} —
+      <a href="mailto:{{ administrator.email }}">{{ administrator.email }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No administrator accounts.</p>
   {% endif %}
 </section>
 {% endblock %}

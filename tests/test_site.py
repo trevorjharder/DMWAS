@@ -11,6 +11,7 @@ from app import (
     MembershipTerm,
     User,
     _database_uri,
+    _is_voting_eligible,
     create_app,
     db,
 )
@@ -73,6 +74,9 @@ def test_membership_application_form_shows_requested_fields(client):
     assert b'<h2>Member account</h2>' in response.data
     guardian_section = response.data.split(b'id="guardian-consent-section"', 1)[1].split(b"</fieldset>", 1)[0]
     assert b" hidden" in guardian_section
+    assert b"Parent or guardian consent for applicants under 19" in guardian_section
+    membership_section = response.data.split(b"Select your membership type", 1)[0].rsplit(b"<fieldset", 1)[1]
+    assert b"guardian-consent-section" not in membership_section
     assert b'name="membership_type"' in response.data
 
 
@@ -207,7 +211,7 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
         assert term.annual_dues_cents == 1000
         assert term.payment_status == "unpaid"
         assert term.payment_date is None
-        assert term.voting_eligible is None
+        assert term.voting_eligible is True
         assert term.expiry_date.year == term.start_date.year + 1
 
     response = client.post(
@@ -220,6 +224,10 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
         assert term.payment_status == "paid"
         assert term.payment_date is not None
         assert term.payment_reference == "cash-receipt-42"
+
+    member_admin_page = client.get("/admin/members")
+    assert member_admin_page.status_code == 200
+    assert b"Eligible to vote" in member_admin_page.data
 
     with client.session_transaction() as session:
         session.clear()
@@ -260,7 +268,81 @@ def test_non_admin_cannot_review_requests(client, app):
     login_as(client, member_id)
     assert client.get("/admin/requests").status_code == 403
     assert client.get("/admin/members").status_code == 403
-    assert b"Manage Members" not in client.get("/member").data
+    assert client.get(f"/admin/members/{member_id}").status_code == 403
+    assert client.post(
+        f"/admin/members/{member_id}/make-admin",
+        data={"csrf_token": "test-csrf-token"},
+    ).status_code == 403
+    member_home = client.get("/member")
+    assert b"Manage Members" not in member_home.data
+    assert b"Access Requests" not in member_home.data
+
+
+def test_voting_eligibility_requires_age_19_and_approved_account():
+    today = date(2038, 6, 1)
+
+    approved_adult = User(
+        full_name="Approved Adult",
+        email="adult@example.test",
+        username="approved-adult",
+        status="active",
+    )
+    approved_adult.membership_details = MembershipDetails(
+        first_name="Approved",
+        last_name="Adult",
+        community="Port McNeill",
+        date_of_birth=date(2019, 6, 1),
+        age_19_or_older=True,
+        mailing_address="123 Main Street",
+        membership_type="adult",
+        activities=[],
+    )
+
+    pending_adult = User(
+        full_name="Pending Adult",
+        email="pending@example.test",
+        username="pending-adult",
+        status="pending",
+    )
+    pending_adult.membership_details = MembershipDetails(
+        first_name="Pending",
+        last_name="Adult",
+        community="Port McNeill",
+        date_of_birth=date(2000, 1, 1),
+        age_19_or_older=True,
+        mailing_address="123 Main Street",
+        membership_type="adult",
+        activities=[],
+    )
+
+    approved_youth = User(
+        full_name="Approved Youth",
+        email="youth@example.test",
+        username="approved-youth",
+        status="active",
+    )
+    approved_youth.membership_details = MembershipDetails(
+        first_name="Approved",
+        last_name="Youth",
+        community="Port McNeill",
+        date_of_birth=date(2019, 6, 2),
+        age_19_or_older=False,
+        mailing_address="123 Main Street",
+        membership_type="youth",
+        activities=[],
+    )
+
+    legacy_member = User(
+        full_name="Legacy Member",
+        email="legacy@example.test",
+        username="legacy-member",
+        status="active",
+    )
+
+    assert _is_voting_eligible(approved_adult, today) is True
+    assert _is_voting_eligible(pending_adult, today) is False
+    assert _is_voting_eligible(approved_youth, today) is False
+    assert _is_voting_eligible(legacy_member, today) is None
 
 
 def test_admin_member_page_is_linked_and_lists_accounts(client, app):
@@ -280,9 +362,48 @@ def test_admin_member_page_is_linked_and_lists_accounts(client, app):
             status="active",
         )
         member.set_password("Active-Member-Password-1")
+        member.membership_details = MembershipDetails(
+            first_name="Active",
+            last_name="Member",
+            community="Port McNeill",
+            date_of_birth=date(1990, 1, 1),
+            age_19_or_older=True,
+            mailing_address="22 Coastal Road",
+            membership_type="adult",
+            activities=["Hiking", "Bouldering"],
+        )
+        member.membership_preferences = MembershipPreferences(
+            volunteer_interest=True,
+            volunteer_interests=["Outdoor trail maintenance"],
+            volunteer_contact_ok=True,
+            newsletter_opt_in=False,
+        )
+        member.consent_records.append(
+            MembershipConsent(
+                consent_type="membership_support",
+                version="membership-support-v1",
+                granted=True,
+            )
+        )
+        member.membership_terms.append(
+            MembershipTerm(
+                term_number=1,
+                membership_type="adult",
+                status="active",
+                approval_date=date(2026, 1, 1),
+                start_date=date(2026, 1, 1),
+                expiry_date=date(2027, 1, 1),
+                annual_dues_cents=1000,
+                payment_status="paid",
+                payment_date=date(2026, 1, 3),
+                payment_reference="receipt-987",
+                voting_eligible=True,
+            )
+        )
         db.session.add_all([admin, member])
         db.session.commit()
         admin_id = admin.id
+        member_id = member.id
 
     login_as(client, admin_id)
     home = client.get("/member")
@@ -293,6 +414,118 @@ def test_admin_member_page_is_linked_and_lists_accounts(client, app):
     assert response.status_code == 200
     assert b"Active Member" in response.data
     assert b"active@example.test" in response.data
+    assert f'href="/admin/members/{member_id}"'.encode() in response.data
+    assert b"Make administrator" in response.data
+
+    detail = client.get(f"/admin/members/{member_id}")
+    assert detail.status_code == 200
+    for data in (
+        b"2026-01-03",
+        b"receipt-987",
+        b"22 Coastal Road",
+        b"Port McNeill",
+        b"Bouldering",
+        b"Outdoor trail maintenance",
+        b"membership-support-v1",
+    ):
+        assert data in detail.data
+
+    response = client.post(
+        f"/admin/members/{member_id}/make-admin",
+        data={"csrf_token": "test-csrf-token"},
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        assert db.session.get(User, member_id).is_admin is True
+    members_page = client.get("/admin/members")
+    assert f'href="/admin/members/{member_id}"'.encode() not in members_page.data
+    assert b"Administrators" in members_page.data
+    assert b"active@example.test" in members_page.data
+
+
+def test_admin_can_permanently_delete_member_and_associated_records(client, app):
+    with app.app_context():
+        admin = User(
+            full_name="Society administrator",
+            email="admin@example.test",
+            username="siteadmin",
+            status="active",
+            is_admin=True,
+        )
+        admin.set_password("Admin-Password-Here-1")
+        member = User(
+            full_name="Delete Me",
+            email="delete@example.test",
+            username="delete-me",
+            status="active",
+        )
+        member.set_password("Delete-Member-Password-1")
+        member.membership_details = MembershipDetails(
+            first_name="Delete",
+            last_name="Me",
+            community="Port McNeill",
+            date_of_birth=date(1990, 1, 1),
+            age_19_or_older=True,
+            mailing_address="123 Main Street",
+            membership_type="adult",
+            activities=["Hiking"],
+        )
+        member.membership_preferences = MembershipPreferences(
+            volunteer_interest=True,
+            volunteer_interests=["Outdoor trail maintenance"],
+            volunteer_contact_ok=True,
+            newsletter_opt_in=True,
+        )
+        member.consent_records.append(
+            MembershipConsent(
+                consent_type="newsletter",
+                version="newsletter-v1",
+                granted=True,
+            )
+        )
+        member.membership_terms.append(
+            MembershipTerm(
+                term_number=1,
+                membership_type="adult",
+                status="active",
+                approval_date=date.today(),
+                start_date=date.today(),
+                expiry_date=date.today().replace(year=date.today().year + 1),
+                annual_dues_cents=1000,
+                payment_status="paid",
+                payment_date=date.today(),
+                payment_reference="receipt-123",
+            )
+        )
+        db.session.add_all([admin, member])
+        db.session.commit()
+        admin_id = admin.id
+        member_id = member.id
+
+    login_as(client, admin_id)
+    page = client.get("/admin/members")
+    assert page.status_code == 200
+    assert b"Permanently delete member" in page.data
+    assert b"This cannot be undone" in page.data
+
+    response = client.post(
+        f"/admin/members/{member_id}/delete",
+        data={"csrf_token": "test-csrf-token"},
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        assert db.session.get(User, member_id) is None
+        assert MembershipDetails.query.filter_by(user_id=member_id).count() == 0
+        assert MembershipPreferences.query.filter_by(user_id=member_id).count() == 0
+        assert MembershipConsent.query.filter_by(user_id=member_id).count() == 0
+        assert MembershipTerm.query.filter_by(user_id=member_id).count() == 0
+        assert db.session.get(User, admin_id) is not None
+
+    response = client.post(
+        f"/admin/members/{admin_id}/delete",
+        data={"csrf_token": "test-csrf-token"},
+    )
+    assert response.status_code == 404
 
 
 def test_invalid_access_request_does_not_create_user(client, app):
@@ -442,6 +675,7 @@ def test_youth_application_records_guardian_consent_and_waived_dues(client, app)
         assert term.membership_type == "youth"
         assert term.annual_dues_cents == 0
         assert term.payment_status == "waived"
+        assert term.voting_eligible is False
 
 
 def test_expired_member_is_blocked_and_admin_can_renew(client, app):

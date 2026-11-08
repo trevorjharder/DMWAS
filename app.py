@@ -194,6 +194,15 @@ def _is_19_or_older(birth_date: date, today: date | None = None) -> bool:
     return age >= 19
 
 
+def _is_voting_eligible(user: User, today: date | None = None) -> bool | None:
+    """Return current eligibility; None means the applicant's age is unknown."""
+    if not user.membership_details:
+        return None
+    return user.status == "active" and _is_19_or_older(
+        user.membership_details.date_of_birth, today
+    )
+
+
 def _database_uri() -> str:
     database_url = os.environ.get("DATABASE_URL", "sqlite:///dmwas.db")
     if database_url.startswith("postgres://"):
@@ -569,6 +578,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @admin_required
     def admin_members():
         members = User.query.filter_by(is_admin=False).order_by(User.full_name).all()
+        administrators = User.query.filter_by(is_admin=True).order_by(User.full_name).all()
         expired_membership = False
         for member in members:
             expired_membership = _expire_membership_if_due(member) or expired_membership
@@ -582,13 +592,73 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         for term in terms:
             latest_terms[term.user_id] = term
             membership_histories.setdefault(term.user_id, []).append(term)
+        voting_eligibility = {
+            member.id: _is_voting_eligible(member) for member in members
+        }
         return render_template(
             "admin_members.html",
             title="Manage members",
             members=members,
+            administrators=administrators,
             latest_terms=latest_terms,
             membership_histories=membership_histories,
+            voting_eligibility=voting_eligibility,
         )
+
+    @app.get("/admin/members/<int:user_id>")
+    @admin_required
+    def admin_member_detail(user_id: int):
+        member = db.session.get(User, user_id)
+        if not member or member.is_admin:
+            abort(404)
+        terms = (
+            MembershipTerm.query.filter_by(user_id=member.id)
+            .order_by(MembershipTerm.term_number)
+            .all()
+        )
+        return render_template(
+            "admin_member_detail.html",
+            title=f"Member details — {member.full_name}",
+            member=member,
+            terms=terms,
+            voting_eligibility=_is_voting_eligible(member),
+        )
+
+    @app.post("/admin/members/<int:user_id>/make-admin")
+    @admin_required
+    def make_member_admin(user_id: int):
+        member = db.session.get(User, user_id)
+        if not member or member.is_admin or member.status != "active":
+            abort(404)
+        member.is_admin = True
+        db.session.commit()
+        flash(f"{member.full_name} is now an administrator.", "success")
+        return redirect(url_for("admin_members"))
+
+    @app.post("/admin/members/<int:user_id>/delete")
+    @admin_required
+    def delete_member(user_id: int):
+        member = db.session.get(User, user_id)
+        if not member or member.is_admin:
+            abort(404)
+
+        member_name = member.full_name
+        MembershipDetails.query.filter_by(user_id=member.id).delete(
+            synchronize_session=False
+        )
+        MembershipPreferences.query.filter_by(user_id=member.id).delete(
+            synchronize_session=False
+        )
+        MembershipConsent.query.filter_by(user_id=member.id).delete(
+            synchronize_session=False
+        )
+        MembershipTerm.query.filter_by(user_id=member.id).delete(
+            synchronize_session=False
+        )
+        db.session.delete(member)
+        db.session.commit()
+        flash(f"Member record for {member_name} and its associated data were permanently deleted.", "success")
+        return redirect(url_for("admin_members"))
 
     @app.get("/admin/requests")
     @admin_required
@@ -622,7 +692,11 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 expiry_date=_one_year_after(today),
                 annual_dues_cents=annual_dues_cents,
                 payment_status=payment_status,
-                voting_eligible=None,
+                voting_eligible=(
+                    _is_19_or_older(details.date_of_birth, today)
+                    if details
+                    else None
+                ),
             )
         )
         user.status = "active"
@@ -695,7 +769,11 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 expiry_date=_one_year_after(today),
                 annual_dues_cents=annual_dues_cents,
                 payment_status="unpaid" if annual_dues_cents else "waived",
-                voting_eligible=None,
+                voting_eligible=(
+                    _is_19_or_older(user.membership_details.date_of_birth, today)
+                    if user.membership_details
+                    else None
+                ),
             )
         )
         user.status = "active"

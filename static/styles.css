@@ -424,6 +424,9 @@ h3 {
   border: 1px solid var(--line);
   border-radius: 0.4rem;
 }
+.form-options[hidden] {
+  display: none;
+}
 .form-options legend {
   padding: 0 0.35rem;
   font-weight: 700;
