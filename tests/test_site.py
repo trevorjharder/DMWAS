@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 from sqlalchemy import inspect
@@ -53,7 +54,6 @@ def test_membership_application_form_shows_requested_fields(client):
         b"Phone number",
         b"Community of residence",
         b"Date of birth",
-        b"Are you 19 or older?",
         b"Mailing address",
         b"Adult Membership (19+)",
         b"Youth Membership (under 19)",
@@ -67,6 +67,13 @@ def test_membership_application_form_shows_requested_fields(client):
         b"Parent or guardian consent for applicants under 19",
     ):
         assert field in response.data
+    assert b"Are you 19 or older?" not in response.data
+    assert re.search(rb'<input\s+id="mailing_address"', response.data)
+    assert b"<textarea" not in response.data
+    assert b'<h2>Member account</h2>' in response.data
+    guardian_section = response.data.split(b'id="guardian-consent-section"', 1)[1].split(b"</fieldset>", 1)[0]
+    assert b" hidden" in guardian_section
+    assert b'name="membership_type"' in response.data
 
 
 def test_post_without_csrf_is_rejected(client):
@@ -86,7 +93,6 @@ def test_access_request_stores_hash_and_is_not_login_enabled(client, app):
             "phone": "250-555-0100",
             "community": "Port McNeill",
             "date_of_birth": "1990-01-01",
-            "age_19_or_older": "yes",
             "mailing_address": "123 Main Street, Port McNeill, BC",
             "membership_type": "adult",
             "activities": ["Rock climbing", "Hiking"],
@@ -319,7 +325,6 @@ def test_membership_application_rejects_age_and_membership_mismatch(client, app)
             "phone": "250-555-0100",
             "community": "Port Hardy",
             "date_of_birth": "2012-01-01",
-            "age_19_or_older": "yes",
             "mailing_address": "123 Main Street",
             "membership_type": "adult",
             "volunteer_contact_ok": "no",
@@ -333,7 +338,7 @@ def test_membership_application_rejects_age_and_membership_mismatch(client, app)
         },
     )
     assert response.status_code == 400
-    assert b"does not match your date of birth" in response.data
+    assert b"membership type must match your age" in response.data
     with app.app_context():
         assert User.query.count() == 0
 
@@ -350,7 +355,6 @@ def test_youth_application_requires_guardian_consent(client, app):
             "phone": "250-555-0100",
             "community": "Port Hardy",
             "date_of_birth": "2012-01-01",
-            "age_19_or_older": "no",
             "mailing_address": "123 Main Street",
             "membership_type": "youth",
             "volunteer_contact_ok": "no",
@@ -381,7 +385,6 @@ def test_youth_application_records_guardian_consent_and_waived_dues(client, app)
             "phone": "250-555-0100",
             "community": "Port Hardy",
             "date_of_birth": "2012-01-01",
-            "age_19_or_older": "no",
             "mailing_address": "123 Main Street",
             "membership_type": "youth",
             "volunteer_interests": ["not_at_this_time"],

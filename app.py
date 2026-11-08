@@ -383,7 +383,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             phone = request.form.get("phone", "").strip()
             community = request.form.get("community", "").strip()
             date_of_birth_value = request.form.get("date_of_birth", "").strip()
-            age_19_or_older_value = request.form.get("age_19_or_older", "")
             mailing_address = request.form.get("mailing_address", "").strip()
             membership_type = request.form.get("membership_type", "")
             activities = request.form.getlist("activities")
@@ -424,8 +423,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             except ValueError:
                 date_of_birth = None
                 errors.append("Enter a valid date of birth that is not in the future.")
-            if age_19_or_older_value not in {"yes", "no"}:
-                errors.append("Confirm whether you are 19 or older.")
             if not mailing_address or len(mailing_address) > 500:
                 errors.append("Enter your mailing address (up to 500 characters).")
             if membership_type not in {"adult", "youth"}:
@@ -443,10 +440,8 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 errors.append("Choose whether you would like to be contacted about volunteer opportunities.")
             if not all(acknowledgements.values()):
                 errors.append("Accept all required membership and communication acknowledgements to apply.")
-            if date_of_birth and age_19_or_older_value in {"yes", "no"}:
+            if date_of_birth:
                 is_adult = _is_19_or_older(date_of_birth)
-                if (age_19_or_older_value == "yes") != is_adult:
-                    errors.append("Your age confirmation does not match your date of birth.")
                 expected_membership = "adult" if is_adult else "youth"
                 if membership_type != expected_membership:
                     errors.append("Your membership type must match your age: adults are 19 or older; youth are under 19.")
@@ -486,7 +481,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 last_name=last_name,
                 community=community,
                 date_of_birth=date_of_birth,
-                age_19_or_older=age_19_or_older_value == "yes",
+                age_19_or_older=_is_19_or_older(date_of_birth),
                 mailing_address=mailing_address,
                 membership_type=membership_type,
                 activities=activities,

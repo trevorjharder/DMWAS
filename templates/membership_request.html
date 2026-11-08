@@ -73,29 +73,23 @@
         value="{{ request.form.get('date_of_birth', '') }}"
       />
       <p class="form-hint">Your date of birth is used to determine youth or adult membership eligibility.</p>
-      <fieldset class="form-options">
-        <legend>Are you 19 or older?</legend>
-        <label class="check-label">
-          <input type="radio" name="age_19_or_older" value="yes" required {% if request.form.get('age_19_or_older') == 'yes' %}checked{% endif %} />
-          Yes
-        </label>
-        <label class="check-label">
-          <input type="radio" name="age_19_or_older" value="no" required {% if request.form.get('age_19_or_older') == 'no' %}checked{% endif %} />
-          No
-        </label>
-      </fieldset>
       <label for="mailing_address">Mailing address</label>
-      <textarea
+      <input
         id="mailing_address"
         name="mailing_address"
+        type="text"
         autocomplete="street-address"
         maxlength="500"
-        rows="3"
         required
-      >{{ request.form.get('mailing_address', '') }}</textarea>
+        value="{{ request.form.get('mailing_address', '') }}"
+      />
 
       <h2>Membership information</h2>
-      <fieldset class="form-options">
+      <fieldset
+        class="form-options"
+        id="guardian-consent-section"
+        {% if request.form.get('membership_type') != 'youth' %}hidden{% endif %}
+      >
         <legend>Select your membership type</legend>
         <label class="check-label">
           <input type="radio" name="membership_type" value="adult" required {% if request.form.get('membership_type') == 'adult' %}checked{% endif %} />
@@ -173,16 +167,16 @@
         <legend>Parent or guardian consent for applicants under 19</legend>
         <p class="form-hint">Required for youth applicants. A parent or guardian must provide their contact details and confirm consent.</p>
         <label for="guardian_name">Parent or guardian name</label>
-        <input id="guardian_name" name="guardian_name" maxlength="120" autocomplete="name" value="{{ request.form.get('guardian_name', '') }}" />
+        <input id="guardian_name" name="guardian_name" maxlength="120" autocomplete="name" {% if request.form.get('membership_type') == 'youth' %}required{% endif %} value="{{ request.form.get('guardian_name', '') }}" />
         <label for="guardian_email">Parent or guardian email</label>
-        <input id="guardian_email" name="guardian_email" type="email" maxlength="254" autocomplete="email" value="{{ request.form.get('guardian_email', '') }}" />
+        <input id="guardian_email" name="guardian_email" type="email" maxlength="254" autocomplete="email" {% if request.form.get('membership_type') == 'youth' %}required{% endif %} value="{{ request.form.get('guardian_email', '') }}" />
         <label class="check-label">
-          <input type="checkbox" name="guardian_consent" value="yes" {% if request.form.get('guardian_consent') == 'yes' %}checked{% endif %} />
+          <input type="checkbox" name="guardian_consent" value="yes" {% if request.form.get('membership_type') == 'youth' %}required{% endif %} {% if request.form.get('guardian_consent') == 'yes' %}checked{% endif %} />
           I am the applicant's parent or guardian and consent to this youth membership application.
         </label>
       </fieldset>
 
-      <h2>Website account</h2>
+      <h2>Member account</h2>
       <label for="username">Choose a username</label>
       <input
         id="username"
@@ -220,6 +214,28 @@
         Submit membership application
       </button>
     </form>
+    <script>
+      (() => {
+        const membershipOptions = document.querySelectorAll('input[name="membership_type"]');
+        const guardianSection = document.getElementById("guardian-consent-section");
+        const guardianInputs = guardianSection.querySelectorAll(
+          'input[name="guardian_name"], input[name="guardian_email"], input[name="guardian_consent"]'
+        );
+
+        function updateGuardianSection() {
+          const isYouth = document.querySelector('input[name="membership_type"]:checked')?.value === "youth";
+          guardianSection.hidden = !isYouth;
+          guardianInputs.forEach((input) => {
+            input.required = isYouth;
+          });
+        }
+
+        membershipOptions.forEach((option) => {
+          option.addEventListener("change", updateGuardianSection);
+        });
+        updateGuardianSection();
+      })();
+    </script>
   </div>
 </section>
 {% endblock %}
