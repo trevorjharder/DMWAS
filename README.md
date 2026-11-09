@@ -43,7 +43,7 @@ The membership application stores date of birth, mailing address, and (for youth
 
 ### Email delivery with Resend
 
-Configure `RESEND_API_KEY` with the Resend API key and `RESEND_FROM` with a sender address on a domain verified in Resend. The legacy `SMTP_FROM` variable is accepted as a fallback sender name/address. The API sends over HTTPS, which works on Railway Hobby where outbound SMTP is disabled. Membership request notifications go to `members@accessni.ca` by default; change this with `ADMIN_NOTIFICATION_EMAIL`.
+Configure `RESEND_API_KEY` with the Resend API key and `RESEND_FROM` with a sender address on a domain verified in Resend. Contact-form emails use `RESEND_CONTACT_FROM`, defaulting to `DMWAS <inquires@accessni.ca>`; set this variable to override it. The legacy `SMTP_FROM` variable is accepted as a fallback sender name/address for other emails. The API sends over HTTPS, which works on Railway Hobby where outbound SMTP is disabled. Membership request notifications go to `members@accessni.ca` by default; change this with `ADMIN_NOTIFICATION_EMAIL`.
 
 Password-reset verification codes are sent to the account email address. Codes are six digits, expire after 10 minutes, are single-use, and are limited to five attempts; new code requests are limited to one per account per minute. Reset requests use a generic response to avoid confirming whether an email address has an account. When Resend settings are absent, accounts and reset requests continue to work, but email is skipped and logged.
 

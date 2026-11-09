@@ -239,11 +239,15 @@ def _password_reset_code_hash(secret_key: str, email: str, code: str) -> str:
 
 
 def _send_resend_email(
-    recipient: str, subject: str, text: str, reply_to: str | None = None
+    recipient: str,
+    subject: str,
+    text: str,
+    reply_to: str | None = None,
+    from_address: str | None = None,
 ) -> bool:
     """Send a plain-text email through Resend's HTTPS API."""
     api_key = os.environ.get("RESEND_API_KEY")
-    sender = os.environ.get("RESEND_FROM") or os.environ.get("SMTP_FROM")
+    sender = from_address or os.environ.get("RESEND_FROM") or os.environ.get("SMTP_FROM")
     if not api_key or not sender:
         logging.getLogger(__name__).info(
             "Resend is not configured; skipped email delivery."
@@ -460,6 +464,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     f"Contact form: {contact_values['subject']}",
                     email_text,
                     reply_to=contact_values["email"],
+                    from_address=os.environ.get(
+                        "RESEND_CONTACT_FROM", "DMWAS <inquires@accessni.ca>"
+                    ),
                 )
             except HTTPError as error:
                 detail = error.read().decode("utf-8", errors="replace")

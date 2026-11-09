@@ -66,8 +66,8 @@ def test_contact_form_sends_to_society_and_uses_visitor_as_reply_to(
 ):
     sent = []
 
-    def fake_send(recipient, subject, text, reply_to=None):
-        sent.append((recipient, subject, text, reply_to))
+    def fake_send(recipient, subject, text, reply_to=None, from_address=None):
+        sent.append((recipient, subject, text, reply_to, from_address))
         return True
 
     monkeypatch.setattr(app_module, "_send_resend_email", fake_send)
@@ -92,6 +92,7 @@ def test_contact_form_sends_to_society_and_uses_visitor_as_reply_to(
             "Name: Jordan Member\nEmail: jordan@example.test\n\n"
             "I have a question about the north trail.",
             "jordan@example.test",
+            "DMWAS <inquires@accessni.ca>",
         )
     ]
 
