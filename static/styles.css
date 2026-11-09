@@ -645,6 +645,12 @@ h3 {
     flex-direction: column;
     gap: 1rem;
   }
+  .auth-card input[type="checkbox"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex: 0 0 1.25rem;
+    margin-top: 0.1rem;
+  }
   .site-nav {
     gap: 0.85rem;
   }

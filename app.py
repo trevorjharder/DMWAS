@@ -257,6 +257,7 @@ def _send_resend_email(recipient: str, subject: str, text: str) -> None:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "DMWAS-website/1.0",
         },
         method="POST",
     )

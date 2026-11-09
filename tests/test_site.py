@@ -125,6 +125,7 @@ def test_password_reset_email_uses_resend_https_api(monkeypatch):
     payload = app_module.json.loads(request.data)
     assert request.full_url == "https://api.resend.com/emails"
     assert request.get_header("Authorization") == "Bearer re_test_api_key"
+    assert request.get_header("User-agent") == "DMWAS-website/1.0"
     assert timeout == 10
     assert payload["from"] == "DMWAS <noreply@example.test>"
     assert payload["to"] == ["member@example.test"]
