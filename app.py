@@ -104,6 +104,7 @@ CONSENT_VERSIONS = {
     "volunteer_contact": "volunteer-contact-v1",
     "guardian_consent": "guardian-consent-v1",
 }
+SOCIETY_ADMIN_EMAIL = "tharder@accessni.ca"
 
 
 class MembershipPreferences(db.Model):
@@ -577,11 +578,20 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @app.get("/admin/members")
     @admin_required
     def admin_members():
-        members = User.query.filter_by(is_admin=False).order_by(User.full_name).all()
-        administrators = User.query.filter_by(is_admin=True).order_by(User.full_name).all()
+        members = (
+            User.query.filter(User.email != SOCIETY_ADMIN_EMAIL)
+            .order_by(User.full_name)
+            .all()
+        )
+        administrators = User.query.filter_by(
+            is_admin=True, email=SOCIETY_ADMIN_EMAIL
+        ).all()
         expired_membership = False
         for member in members:
-            expired_membership = _expire_membership_if_due(member) or expired_membership
+            if not member.is_admin:
+                expired_membership = (
+                    _expire_membership_if_due(member) or expired_membership
+                )
         if expired_membership:
             db.session.commit()
         terms = MembershipTerm.query.order_by(

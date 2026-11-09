@@ -450,6 +450,41 @@ def test_admin_member_page_is_linked_and_lists_accounts(client, app):
     assert b"active@example.test" in members_page.data
 
 
+def test_admin_members_table_includes_admins_except_society_administrator(client, app):
+    with app.app_context():
+        table_admin = User(
+            full_name="Additional Administrator",
+            email="additional-admin@example.test",
+            username="additional-admin",
+            status="active",
+            is_admin=True,
+        )
+        table_admin.set_password("Additional-Admin-Password-1")
+        society_admin = User(
+            full_name="Society Administrator",
+            email="tharder@accessni.ca",
+            username="society-admin",
+            status="active",
+            is_admin=True,
+        )
+        society_admin.set_password("Society-Admin-Password-1")
+        db.session.add_all([table_admin, society_admin])
+        db.session.commit()
+        table_admin_id = table_admin.id
+
+    login_as(client, table_admin_id)
+    response = client.get("/admin/members")
+
+    assert response.status_code == 200
+    member_table = response.data.split(b"<tbody>", 1)[1].split(b"</tbody>", 1)[0]
+    administrators_section = response.data.split(b"<h2>Administrators</h2>", 1)[1]
+    assert b"additional-admin@example.test" in member_table
+    assert b"Administrator</span>" in member_table
+    assert f'href="/admin/members/{table_admin_id}"'.encode() not in member_table
+    assert b"tharder@accessni.ca" not in member_table
+    assert b"tharder@accessni.ca" in administrators_section
+
+
 def test_admin_can_permanently_delete_member_and_associated_records(client, app):
     with app.app_context():
         admin = User(

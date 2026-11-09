@@ -32,11 +32,18 @@
         {% set history = membership_histories.get(member.id, []) %}
         <tr>
           <td>
+            {% if not member.is_admin %}
             <a href="{{ url_for('admin_member_detail', user_id=member.id) }}">
               {{ member.member_number }}
             </a>
+            {% else %} {{ member.member_number }} {% endif %}
           </td>
-          <td>{{ member.full_name }}</td>
+          <td>
+            {{ member.full_name }} {% if member.is_admin %}<span
+              class="status-pill"
+              >Administrator</span
+            >{% endif %}
+          </td>
           <td><a href="mailto:{{ member.email }}">{{ member.email }}</a></td>
           <td>{{ member.username }}</td>
           <td>
@@ -82,7 +89,9 @@
             %}—{% endif %}
           </td>
           <td>
-            {% if term and term.payment_status == 'unpaid' %}
+            {% if member.is_admin %}
+            <span class="form-hint">Administrator account</span>
+            {% else %} {% if term and term.payment_status == 'unpaid' %}
             <form
               method="post"
               action="{{ url_for('record_membership_payment', user_id=member.id) }}"
@@ -157,6 +166,7 @@
                 Permanently delete member
               </button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
