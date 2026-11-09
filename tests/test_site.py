@@ -31,10 +31,19 @@ def test_postgres_urls_select_installed_psycopg2_driver(monkeypatch):
 
 def test_public_pages_render(client):
     assert client.get("/").status_code == 302
-    for path in ("/about", "/notices", "/contact"):
+    for path in ("/about", "/notices", "/contact", "/donate"):
         response = client.get(path)
         assert response.status_code == 200
         assert b"District of Mount Waddington" in response.data
+
+
+def test_donate_page_shows_etransfer_email_and_equipment_contact_note(client):
+    response = client.get("/donate")
+
+    assert response.status_code == 200
+    assert b"donations@accessni.ca" in response.data
+    assert b"donate equipment" in response.data
+    assert b'href="mailto:donations@accessni.ca"' in response.data
 
 
 def test_contact_uses_configured_public_email(client):

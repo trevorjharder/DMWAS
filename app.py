@@ -492,6 +492,10 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     def privacy():
         return render_template("privacy.html", title="Privacy information")
 
+    @app.get("/donate")
+    def donate():
+        return render_template("donate.html", title="Donate")
+
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
