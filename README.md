@@ -10,6 +10,7 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 - Member sign-in and a placeholder private member landing page.
 - A protected admin page to approve or decline pending requests.
 - Optional email notification to `members@accessni.ca` when SMTP is configured.
+- Email verification-code password recovery for account holders.
 - PostgreSQL support for Railway, with SQLite as a local-development default.
 
 The About page summarizes the six purposes in the Society constitution provided so far. The public contact page intentionally shows no details until approved contact information is configured. The Notices page is an empty placeholder; notice editing is not implemented.
@@ -44,6 +45,8 @@ The membership application stores date of birth, mailing address, and (for youth
 
 Configure `SMTP_HOST`, `SMTP_PORT` (defaults to `587`), `SMTP_FROM`, and optionally `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_USE_TLS` (defaults to `true`). The recipient defaults to `members@accessni.ca`; it can be changed using `ADMIN_NOTIFICATION_EMAIL`. When SMTP settings are absent, requests are saved normally and a message is written to the application log instead of being emailed.
 
+The same SMTP settings send password-reset verification codes to the account email address. Codes are six digits, expire after 10 minutes, are single-use, and are limited to five attempts; new code requests are limited to one per account per minute. Configure Resend SMTP credentials in Railway (`SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USERNAME=resend`, `SMTP_PASSWORD` set to the Resend API key, `SMTP_USE_TLS=true`) and use a Resend-verified sender address for `SMTP_FROM`. Reset requests use a generic response to avoid confirming whether an email address has an account.
+
 ### Public contact settings
 
 Set any approved public details using `PUBLIC_CONTACT_EMAIL`, `PUBLIC_CONTACT_PHONE`, and `PUBLIC_CONTACT_ADDRESS`. These are displayed on the Contact page. Do not put private Society/member information in these variables.
@@ -60,8 +63,8 @@ Approving a new application creates a one-year membership term. Adult dues are r
 
 The `/privacy` page is a draft disclosure, not a substitute for Society-approved privacy policy. Before launch, approve the notice, retention schedule, privacy contact, guardian-consent process, membership-term rules, and director eligibility rules. Application acknowledgements are not recreational waivers.
 
-The constitution supplied so far contains the Society name and purposes, but does not state membership eligibility, dues, payment confirmation, or approval authority. Before public launch, confirm the Society's membership and approval policy and adjust the access request and admin review flow to match. Dues are not collected online. Declined-request retention/reapplication rules and password recovery are also not yet decided.
+The constitution supplied so far contains the Society name and purposes, but does not state membership eligibility, dues, payment confirmation, or approval authority. Before public launch, confirm the Society's membership and approval policy and adjust the access request and admin review flow to match. Dues are not collected online. Declined-request retention and reapplication rules are also not yet decided.
 
 ## Next steps
 
-Before launch, provide approved public contact details, logo/colors/photos, any initial notices, and the Society's membership/approval policy. Choose and test the email delivery service and configure its credentials securely in Railway. Member documents, the member directory, notice editing, password recovery, and online dues payments are outside this first implementation step.
+Before launch, provide approved public contact details, logo/colors/photos, any initial notices, and the Society's membership/approval policy. Configure and test the email delivery service securely in Railway. Member documents, the member directory, notice editing, and online dues payments are outside this first implementation step.

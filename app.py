@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import re
 import secrets
 import smtplib
 import threading
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
@@ -62,6 +64,22 @@ class User(db.Model):
     @property
     def member_number(self) -> str:
         return f"DMWAS-{self.id:06d}" if self.id is not None else "Pending"
+
+
+class PasswordResetCode(db.Model):
+    """A short-lived, single-use email verification code for password recovery."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    code_hash = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
 
 
 class MembershipDetails(db.Model):
@@ -211,6 +229,44 @@ def _database_uri() -> str:
     if database_url.startswith("postgresql://"):
         return database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return database_url
+
+
+def _password_reset_code_hash(secret_key: str, email: str, code: str) -> str:
+    """Hash a low-entropy code with the app secret so database leaks don't expose it."""
+    message = f"{email.strip().lower()}:{code}".encode("utf-8")
+    return hmac.new(secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
+
+def _send_password_reset_code(user: User, code: str) -> None:
+    """Send the password-reset verification code using the configured SMTP server."""
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_from = os.environ.get("SMTP_FROM")
+    if not smtp_host or not smtp_from:
+        logging.getLogger(__name__).info(
+            "SMTP is not configured; skipped password reset email."
+        )
+        return
+
+    message = EmailMessage()
+    message["Subject"] = "Your DMWAS password reset code"
+    message["From"] = smtp_from
+    message["To"] = user.email
+    message.set_content(
+        f"Hello {user.full_name},\n\n"
+        f"Your password reset code is: {code}\n\n"
+        "This code expires in 10 minutes and can only be used once. "
+        "If you did not request a password reset, you can ignore this email."
+    )
+
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
+        if os.environ.get("SMTP_USE_TLS", "true").lower() == "true":
+            smtp.starttls()
+        smtp_username = os.environ.get("SMTP_USERNAME")
+        smtp_password = os.environ.get("SMTP_PASSWORD")
+        if smtp_username and smtp_password:
+            smtp.login(smtp_username, smtp_password)
+        smtp.send_message(message)
 
 
 def _send_request_notification(user: User) -> None:
@@ -383,6 +439,125 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 return redirect(url_for("member_home"))
             flash("The username or password was not accepted, or the account is awaiting approval.", "error")
         return render_template("login.html", title="Member sign in")
+
+    @app.route("/forgot-password", methods=["GET", "POST"])
+    def forgot_password():
+        if request.method == "POST":
+            email = request.form.get("email", "").strip().lower()
+            if not EMAIL_PATTERN.fullmatch(email):
+                flash("Enter a valid email address.", "error")
+                return render_template("forgot_password.html", title="Forgot password"), 400
+
+            session["password_reset_email"] = email
+            user = User.query.filter_by(email=email).first()
+            if user:
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                latest_code = (
+                    PasswordResetCode.query.filter_by(user_id=user.id)
+                    .order_by(PasswordResetCode.created_at.desc())
+                    .first()
+                )
+                # Limit email abuse while allowing a fresh request after one minute.
+                if not latest_code or now - latest_code.created_at >= timedelta(minutes=1):
+                    PasswordResetCode.query.filter_by(
+                        user_id=user.id, used_at=None
+                    ).update({"used_at": now}, synchronize_session=False)
+                    code = f"{secrets.randbelow(1_000_000):06d}"
+                    reset_code = PasswordResetCode(
+                        user_id=user.id,
+                        code_hash=_password_reset_code_hash(
+                            str(app.config["SECRET_KEY"]), email, code
+                        ),
+                        created_at=now,
+                        expires_at=now + timedelta(minutes=10),
+                    )
+                    db.session.add(reset_code)
+                    db.session.commit()
+                    try:
+                        _send_password_reset_code(user, code)
+                    except (OSError, smtplib.SMTPException, ValueError):
+                        app.logger.exception("Could not send password reset code")
+
+            flash(
+                "If an account exists for that email, a verification code will be sent. "
+                "Check your inbox and spam folder.",
+                "success",
+            )
+            return redirect(url_for("reset_password"))
+
+        return render_template("forgot_password.html", title="Forgot password")
+
+    @app.route("/reset-password", methods=["GET", "POST"])
+    def reset_password():
+        email = session.get("password_reset_email", "")
+        if not email:
+            flash("Request a password reset code first.", "info")
+            return redirect(url_for("forgot_password"))
+
+        if request.method == "POST":
+            code = request.form.get("code", "").strip()
+            password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
+            user = User.query.filter_by(email=email).first()
+            reset_code = None
+            if user:
+                reset_code = (
+                    PasswordResetCode.query.filter_by(user_id=user.id, used_at=None)
+                    .order_by(PasswordResetCode.created_at.desc())
+                    .first()
+                )
+
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            if not reset_code or reset_code.expires_at <= now:
+                if reset_code:
+                    reset_code.used_at = now
+                    db.session.commit()
+                flash("That code is invalid or expired. Request a new code and try again.", "error")
+                return render_template("reset_password.html", title="Reset password"), 400
+
+            if reset_code.attempts >= 5:
+                reset_code.used_at = now
+                db.session.commit()
+                flash("Too many incorrect attempts. Request a new code.", "error")
+                return render_template("reset_password.html", title="Reset password"), 400
+
+            expected_hash = _password_reset_code_hash(
+                str(app.config["SECRET_KEY"]), email, code
+            )
+            if not re.fullmatch(r"\d{6}", code) or not hmac.compare_digest(
+                reset_code.code_hash, expected_hash
+            ):
+                reset_code.attempts += 1
+                if reset_code.attempts >= 5:
+                    reset_code.used_at = now
+                db.session.commit()
+                flash("That code is invalid or expired. Check it and try again.", "error")
+                return render_template("reset_password.html", title="Reset password"), 400
+
+            if len(password) < MIN_PASSWORD_LENGTH:
+                flash(
+                    f"Password must be at least {MIN_PASSWORD_LENGTH} characters.",
+                    "error",
+                )
+                return render_template("reset_password.html", title="Reset password"), 400
+            if password != confirm_password:
+                flash("The passwords do not match.", "error")
+                return render_template("reset_password.html", title="Reset password"), 400
+
+            user.set_password(password)
+            reset_code.used_at = now
+            # Also invalidate any older outstanding code for this account.
+            PasswordResetCode.query.filter(
+                PasswordResetCode.user_id == user.id,
+                PasswordResetCode.id != reset_code.id,
+                PasswordResetCode.used_at.is_(None),
+            ).update({"used_at": now}, synchronize_session=False)
+            db.session.commit()
+            session.pop("password_reset_email", None)
+            flash("Your password has been reset. Sign in with your new password.", "success")
+            return redirect(url_for("login"))
+
+        return render_template("reset_password.html", title="Reset password")
 
     @app.route("/membership/request", methods=["GET", "POST"])
     def membership_request():
@@ -663,6 +838,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             synchronize_session=False
         )
         MembershipTerm.query.filter_by(user_id=member.id).delete(
+            synchronize_session=False
+        )
+        PasswordResetCode.query.filter_by(user_id=member.id).delete(
             synchronize_session=False
         )
         db.session.delete(member)

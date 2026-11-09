@@ -1,6 +1,7 @@
 import re
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
+import app as app_module
 from sqlalchemy import inspect
 from werkzeug.security import check_password_hash
 
@@ -9,6 +10,7 @@ from app import (
     MembershipDetails,
     MembershipPreferences,
     MembershipTerm,
+    PasswordResetCode,
     User,
     _database_uri,
     _is_voting_eligible,
@@ -88,6 +90,200 @@ def test_membership_application_form_shows_requested_fields(client):
 def test_post_without_csrf_is_rejected(client):
     response = client.post("/membership/request", data={})
     assert response.status_code == 400
+
+
+def test_forgot_password_sends_hashed_expiring_code(client, app, monkeypatch):
+    sent = []
+
+    def fake_send(user, code):
+        sent.append((user.email, code))
+
+    monkeypatch.setattr(app_module, "_send_password_reset_code", fake_send)
+    with app.app_context():
+        user = User(
+            full_name="Test Member",
+            email="member@example.test",
+            username="testmember",
+            status="active",
+        )
+        user.set_password("Old-Password-Here-1")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    set_csrf(client)
+    response = client.post(
+        "/forgot-password",
+        data={"csrf_token": "test-csrf-token", "email": "member@example.test"},
+    )
+    assert response.status_code == 302
+    assert response.location.endswith("/reset-password")
+    assert sent[0][0] == "member@example.test"
+    assert re.fullmatch(r"\d{6}", sent[0][1])
+
+    with app.app_context():
+        reset_code = PasswordResetCode.query.filter_by(user_id=user_id).one()
+        assert reset_code.code_hash != sent[0][1]
+        assert reset_code.expires_at > reset_code.created_at
+        assert reset_code.used_at is None
+
+    response = client.post(
+        "/reset-password",
+        data={
+            "csrf_token": "test-csrf-token",
+            "code": sent[0][1],
+            "password": "New-Password-Here-2",
+            "confirm_password": "New-Password-Here-2",
+        },
+    )
+    assert response.status_code == 302
+    assert response.location.endswith("/login")
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        assert user.check_password("New-Password-Here-2")
+        assert not user.check_password("Old-Password-Here-1")
+        assert PasswordResetCode.query.filter_by(user_id=user_id).one().used_at is not None
+
+
+def test_password_reset_code_is_single_use_and_limited_to_five_attempts(
+    client, app, monkeypatch
+):
+    sent = []
+    monkeypatch.setattr(
+        app_module,
+        "_send_password_reset_code",
+        lambda _user, code: sent.append(code),
+    )
+    with app.app_context():
+        user = User(
+            full_name="Test Member",
+            email="member@example.test",
+            username="testmember",
+            status="active",
+        )
+        user.set_password("Old-Password-Here-1")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    set_csrf(client)
+    client.post(
+        "/forgot-password",
+        data={"csrf_token": "test-csrf-token", "email": "member@example.test"},
+    )
+    for _ in range(5):
+        response = client.post(
+            "/reset-password",
+            data={
+                "csrf_token": "test-csrf-token",
+                "code": "000000" if sent[0] != "000000" else "000001",
+                "password": "New-Password-Here-2",
+                "confirm_password": "New-Password-Here-2",
+            },
+        )
+        assert response.status_code == 400
+
+    response = client.post(
+        "/reset-password",
+        data={
+            "csrf_token": "test-csrf-token",
+            "code": sent[0],
+            "password": "New-Password-Here-2",
+            "confirm_password": "New-Password-Here-2",
+        },
+    )
+    assert response.status_code == 400
+    with app.app_context():
+        reset_code = PasswordResetCode.query.filter_by(user_id=user_id).one()
+        assert reset_code.attempts == 5
+        assert reset_code.used_at is not None
+        assert db.session.get(User, user_id).check_password("Old-Password-Here-1")
+
+
+def test_expired_password_reset_code_is_rejected(client, app, monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        app_module,
+        "_send_password_reset_code",
+        lambda _user, code: sent.append(code),
+    )
+    with app.app_context():
+        user = User(
+            full_name="Test Member",
+            email="member@example.test",
+            username="testmember",
+            status="active",
+        )
+        user.set_password("Old-Password-Here-1")
+        db.session.add(user)
+        db.session.commit()
+        user_id = user.id
+
+    set_csrf(client)
+    client.post(
+        "/forgot-password",
+        data={"csrf_token": "test-csrf-token", "email": "member@example.test"},
+    )
+    with app.app_context():
+        reset_code = PasswordResetCode.query.filter_by(user_id=user_id).one()
+        reset_code.expires_at = (
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
+        )
+        db.session.commit()
+
+    response = client.post(
+        "/reset-password",
+        data={
+            "csrf_token": "test-csrf-token",
+            "code": sent[0],
+            "password": "New-Password-Here-2",
+            "confirm_password": "New-Password-Here-2",
+        },
+    )
+    assert response.status_code == 400
+    with app.app_context():
+        reset_code = PasswordResetCode.query.filter_by(user_id=user_id).one()
+        assert reset_code.used_at is not None
+        assert db.session.get(User, user_id).check_password("Old-Password-Here-1")
+
+
+def test_forgot_password_response_does_not_disclose_unknown_email(
+    client, app, monkeypatch
+):
+    sent = []
+    monkeypatch.setattr(
+        app_module,
+        "_send_password_reset_code",
+        lambda _user, code: sent.append(code),
+    )
+    with app.app_context():
+        user = User(
+            full_name="Test Member",
+            email="member@example.test",
+            username="testmember",
+            status="active",
+        )
+        user.set_password("Old-Password-Here-1")
+        db.session.add(user)
+        db.session.commit()
+
+    set_csrf(client)
+    client.post(
+        "/forgot-password",
+        data={"csrf_token": "test-csrf-token", "email": "member@example.test"},
+    )
+    known_email_response = client.get("/reset-password")
+
+    set_csrf(client)
+    client.post(
+        "/forgot-password",
+        data={"csrf_token": "test-csrf-token", "email": "nobody@example.test"},
+    )
+    unknown_email_response = client.get("/reset-password")
+
+    assert b"If an account exists for that email" in known_email_response.data
+    assert b"If an account exists for that email" in unknown_email_response.data
+    assert len(sent) == 1
 
 
 def test_access_request_stores_hash_and_is_not_login_enabled(client, app):
