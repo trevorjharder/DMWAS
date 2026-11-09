@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Callable, TypeVar, cast
+from urllib.error import HTTPError
 from urllib import request as urllib_request
 
 import click
@@ -465,6 +466,16 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     db.session.commit()
                     try:
                         _send_password_reset_code(user, code)
+                    except HTTPError as error:
+                        detail = error.read().decode("utf-8", errors="replace")
+                        request_id = error.headers.get("x-resend-id", "unknown")
+                        app.logger.error(
+                            "Resend rejected password reset email: HTTP %s, "
+                            "request id %s, response %s",
+                            error.code,
+                            request_id,
+                            detail,
+                        )
                     except (OSError, ValueError):
                         app.logger.exception("Could not send password reset code")
 
@@ -699,6 +710,16 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
 
             try:
                 _send_request_notification(user)
+            except HTTPError as error:
+                detail = error.read().decode("utf-8", errors="replace")
+                request_id = error.headers.get("x-resend-id", "unknown")
+                app.logger.error(
+                    "Resend rejected membership request notification: HTTP %s, "
+                    "request id %s, response %s",
+                    error.code,
+                    request_id,
+                    detail,
+                )
             except (OSError, ValueError):
                 app.logger.exception("Could not send membership request notification")
             flash("Your membership application has been received. Sign-in will be available after Society approval.", "success")

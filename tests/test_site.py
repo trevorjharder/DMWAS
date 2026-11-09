@@ -1,4 +1,5 @@
 import re
+from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 
 import app as app_module
@@ -129,6 +130,43 @@ def test_password_reset_email_uses_resend_https_api(monkeypatch):
     assert payload["to"] == ["member@example.test"]
     assert payload["subject"] == "Your DMWAS password reset code"
     assert "123456" in payload["text"]
+
+
+def test_resend_http_error_body_is_logged_without_changing_generic_response(
+    client, app, monkeypatch, caplog
+):
+    with app.app_context():
+        user = User(
+            full_name="Test Member",
+            email="member@example.test",
+            username="testmember",
+            status="active",
+        )
+        user.set_password("Old-Password-Here-1")
+        db.session.add(user)
+        db.session.commit()
+
+    def reject_email(_user, _code):
+        raise app_module.HTTPError(
+            "https://api.resend.com/emails",
+            403,
+            "Forbidden",
+            {"x-resend-id": "req_test"},
+            BytesIO(b'{"message":"sender domain is not verified"}'),
+        )
+
+    monkeypatch.setattr(app_module, "_send_password_reset_code", reject_email)
+    set_csrf(client)
+    response = client.post(
+        "/forgot-password",
+        data={"csrf_token": "test-csrf-token", "email": "member@example.test"},
+    )
+
+    assert response.status_code == 302
+    assert "HTTP 403" in caplog.text
+    assert "req_test" in caplog.text
+    assert "sender domain is not verified" in caplog.text
+    assert b"sender domain is not verified" not in response.data
 
 
 def test_forgot_password_sends_hashed_expiring_code(client, app, monkeypatch):
