@@ -64,6 +64,8 @@ def test_contact_page_has_message_form_and_csrf(client):
 def test_contact_form_sends_to_society_and_uses_visitor_as_reply_to(
     client, monkeypatch
 ):
+    monkeypatch.setenv("RESEND_FROM", "DMWAS <noreply@accessni.ca>")
+    monkeypatch.setenv("RESEND_CONTACT_FROM", "DMWAS <noreply@accessni.ca>")
     sent = []
 
     def fake_send(recipient, subject, text, reply_to=None, from_address=None):

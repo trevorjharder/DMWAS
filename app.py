@@ -464,9 +464,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     f"Contact form: {contact_values['subject']}",
                     email_text,
                     reply_to=contact_values["email"],
-                    from_address=os.environ.get(
-                        "RESEND_CONTACT_FROM", "DMWAS <inquires@accessni.ca>"
-                    ),
+                    from_address="DMWAS <inquires@accessni.ca>",
                 )
             except HTTPError as error:
                 detail = error.read().decode("utf-8", errors="replace")
