@@ -56,7 +56,7 @@ def test_contact_page_has_message_form_and_csrf(client):
 
     assert response.status_code == 200
     assert b"Send us a message" in response.data
-    assert b"info@accessni.com" in response.data
+    assert b"inquires@accessni.ca" in response.data
     assert b'name="csrf_token"' in response.data
     assert b'name="message"' in response.data
 
@@ -89,7 +89,7 @@ def test_contact_form_sends_to_society_and_uses_visitor_as_reply_to(
     assert response.location.endswith("/contact")
     assert sent == [
         (
-            "info@accessni.com",
+            "inquires@accessni.ca",
             "Contact form: Trail question",
             "Name: Jordan Member\nEmail: jordan@example.test\n\n"
             "I have a question about the north trail.",

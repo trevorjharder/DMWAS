@@ -460,7 +460,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             )
             try:
                 sent = _send_resend_email(
-                    "info@accessni.com",
+                    "inquires@accessni.ca",
                     f"Contact form: {contact_values['subject']}",
                     email_text,
                     reply_to=contact_values["email"],
