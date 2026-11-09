@@ -238,7 +238,9 @@ def _password_reset_code_hash(secret_key: str, email: str, code: str) -> str:
     return hmac.new(secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
 
 
-def _send_resend_email(recipient: str, subject: str, text: str) -> None:
+def _send_resend_email(
+    recipient: str, subject: str, text: str, reply_to: str | None = None
+) -> bool:
     """Send a plain-text email through Resend's HTTPS API."""
     api_key = os.environ.get("RESEND_API_KEY")
     sender = os.environ.get("RESEND_FROM") or os.environ.get("SMTP_FROM")
@@ -246,10 +248,13 @@ def _send_resend_email(recipient: str, subject: str, text: str) -> None:
         logging.getLogger(__name__).info(
             "Resend is not configured; skipped email delivery."
         )
-        return
+        return False
 
+    email_payload = {"from": sender, "to": [recipient], "subject": subject, "text": text}
+    if reply_to:
+        email_payload["reply_to"] = reply_to
     payload = json.dumps(
-        {"from": sender, "to": [recipient], "subject": subject, "text": text}
+        email_payload
     ).encode("utf-8")
     resend_request = urllib_request.Request(
         "https://api.resend.com/emails",
@@ -263,6 +268,7 @@ def _send_resend_email(recipient: str, subject: str, text: str) -> None:
     )
     with urllib_request.urlopen(resend_request, timeout=10) as response:
         response.read()
+    return True
 
 
 def _send_password_reset_code(user: User, code: str) -> None:
@@ -406,8 +412,81 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         return render_template("notices.html", title="Notices")
 
     @app.get("/contact")
+    @app.post("/contact")
     def contact():
-        return render_template("contact.html", title="Contact")
+        contact_values = {
+            "name": "",
+            "email": "",
+            "subject": "",
+            "message": "",
+        }
+        if request.method == "POST":
+            # Quietly discard common bot submissions to the hidden honeypot field.
+            if request.form.get("website", "").strip():
+                flash("Your message has been sent. Thank you for contacting the Society.", "success")
+                return redirect(url_for("contact"))
+
+            contact_values = {
+                "name": request.form.get("name", "").strip(),
+                "email": request.form.get("email", "").strip().lower(),
+                "subject": request.form.get("subject", "").strip(),
+                "message": request.form.get("message", "").strip(),
+            }
+            errors = []
+            if not contact_values["name"] or len(contact_values["name"]) > 120:
+                errors.append("Enter your name (up to 120 characters).")
+            if not EMAIL_PATTERN.fullmatch(contact_values["email"]):
+                errors.append("Enter a valid email address.")
+            if not contact_values["subject"] or len(contact_values["subject"]) > 160:
+                errors.append("Enter a subject (up to 160 characters).")
+            if not contact_values["message"] or len(contact_values["message"]) > 5000:
+                errors.append("Enter a message (up to 5,000 characters).")
+
+            if errors:
+                for error in errors:
+                    flash(error, "error")
+                return render_template(
+                    "contact.html", title="Contact", contact_values=contact_values
+                ), 400
+
+            email_text = (
+                f"Name: {contact_values['name']}\n"
+                f"Email: {contact_values['email']}\n\n"
+                f"{contact_values['message']}"
+            )
+            try:
+                sent = _send_resend_email(
+                    "info@accessni.com",
+                    f"Contact form: {contact_values['subject']}",
+                    email_text,
+                    reply_to=contact_values["email"],
+                )
+            except HTTPError as error:
+                detail = error.read().decode("utf-8", errors="replace")
+                request_id = error.headers.get("x-resend-id", "unknown")
+                app.logger.error(
+                    "Resend rejected contact form email: HTTP %s, request id %s, response %s",
+                    error.code,
+                    request_id,
+                    detail,
+                )
+                sent = False
+            except (OSError, ValueError):
+                app.logger.exception("Could not send contact form email")
+                sent = False
+
+            if sent:
+                flash("Your message has been sent. Thank you for contacting the Society.", "success")
+                return redirect(url_for("contact"))
+
+            flash(
+                "We could not send your message right now. Please try again later or use the contact details listed above.",
+                "error",
+            )
+
+        return render_template(
+            "contact.html", title="Contact", contact_values=contact_values
+        )
 
     @app.get("/privacy")
     def privacy():
@@ -806,7 +885,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @admin_required
     def admin_member_detail(user_id: int):
         member = db.session.get(User, user_id)
-        if not member or member.is_admin:
+        if not member:
             abort(404)
         terms = (
             MembershipTerm.query.filter_by(user_id=member.id)

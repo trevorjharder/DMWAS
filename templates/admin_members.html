@@ -32,11 +32,9 @@
         {% set history = membership_histories.get(member.id, []) %}
         <tr>
           <td>
-            {% if not member.is_admin %}
             <a href="{{ url_for('admin_member_detail', user_id=member.id) }}">
               {{ member.member_number }}
             </a>
-            {% else %} {{ member.member_number }} {% endif %}
           </td>
           <td>
             {{ member.full_name }} {% if member.is_admin %}<span

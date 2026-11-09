@@ -42,6 +42,75 @@ def test_contact_uses_configured_public_email(client):
     assert b"hello@example.test" in response.data
 
 
+def test_contact_page_has_message_form_and_csrf(client):
+    response = client.get("/contact")
+
+    assert response.status_code == 200
+    assert b"Send us a message" in response.data
+    assert b"info@accessni.com" in response.data
+    assert b'name="csrf_token"' in response.data
+    assert b'name="message"' in response.data
+
+
+def test_contact_form_sends_to_society_and_uses_visitor_as_reply_to(
+    client, monkeypatch
+):
+    sent = []
+
+    def fake_send(recipient, subject, text, reply_to=None):
+        sent.append((recipient, subject, text, reply_to))
+        return True
+
+    monkeypatch.setattr(app_module, "_send_resend_email", fake_send)
+    set_csrf(client)
+    response = client.post(
+        "/contact",
+        data={
+            "csrf_token": "test-csrf-token",
+            "name": "Jordan Member",
+            "email": "jordan@example.test",
+            "subject": "Trail question",
+            "message": "I have a question about the north trail.",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response.location.endswith("/contact")
+    assert sent == [
+        (
+            "info@accessni.com",
+            "Contact form: Trail question",
+            "Name: Jordan Member\nEmail: jordan@example.test\n\n"
+            "I have a question about the north trail.",
+            "jordan@example.test",
+        )
+    ]
+
+
+def test_contact_form_rejects_invalid_email_without_sending(client, monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        app_module,
+        "_send_resend_email",
+        lambda *args, **kwargs: sent.append((args, kwargs)),
+    )
+    set_csrf(client)
+    response = client.post(
+        "/contact",
+        data={
+            "csrf_token": "test-csrf-token",
+            "name": "Jordan Member",
+            "email": "not-an-email",
+            "subject": "Trail question",
+            "message": "I have a question about the north trail.",
+        },
+    )
+
+    assert response.status_code == 400
+    assert b"Enter a valid email address" in response.data
+    assert sent == []
+
+
 def test_privacy_page_is_public_and_identifies_draft(client):
     response = client.get("/privacy")
     assert response.status_code == 200
@@ -719,9 +788,12 @@ def test_admin_member_page_is_linked_and_lists_accounts(client, app):
     with app.app_context():
         assert db.session.get(User, member_id).is_admin is True
     members_page = client.get("/admin/members")
-    assert f'href="/admin/members/{member_id}"'.encode() not in members_page.data
+    assert f'href="/admin/members/{member_id}"'.encode() in members_page.data
     assert b"Administrators" in members_page.data
     assert b"active@example.test" in members_page.data
+    promoted_member_detail = client.get(f"/admin/members/{member_id}")
+    assert promoted_member_detail.status_code == 200
+    assert b"Active Member" in promoted_member_detail.data
 
 
 def test_admin_members_table_includes_admins_except_society_administrator(client, app):

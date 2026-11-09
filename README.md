@@ -4,7 +4,7 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 
 ## Current first-step features
 
-- Public About, Notices, and Contact pages.
+- Public About, Notices, and Contact pages, including a contact form that emails `info@accessni.com`.
 - Membership applications with hashed passwords, contact and membership details, and pending approval until an administrator approves them.
 - Optional volunteer and newsletter preferences, versioned consent records, and membership term/payment history.
 - Member sign-in and a placeholder private member landing page.
@@ -13,7 +13,7 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 - Email verification-code password recovery for account holders.
 - PostgreSQL support for Railway, with SQLite as a local-development default.
 
-The About page summarizes the six purposes in the Society constitution provided so far. The public contact page intentionally shows no details until approved contact information is configured. The Notices page is an empty placeholder; notice editing is not implemented.
+The About page summarizes the six purposes in the Society constitution provided so far. The public contact page displays approved contact details when configured and includes a Resend-powered message form. The Notices page is an empty placeholder; notice editing is not implemented.
 
 ## Local development
 
