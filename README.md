@@ -4,7 +4,7 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 
 ## Current first-step features
 
-- Public About, Notices, and Contact pages, including a contact form that emails `inquires@accessni.ca`.
+- Public About, Notices, and Contact pages, including a contact form that emails `inquiries@accessni.ca`.
 - Membership applications with hashed passwords, contact and membership details, and pending approval until an administrator approves them.
 - Optional volunteer and newsletter preferences, versioned consent records, and membership term/payment history.
 - Member sign-in and a placeholder private member landing page.
@@ -43,7 +43,7 @@ The membership application stores date of birth, mailing address, and (for youth
 
 ### Email delivery with Resend
 
-Configure `RESEND_API_KEY` with the Resend API key and `RESEND_FROM` with a sender address on a domain verified in Resend. Contact-form emails always use `DMWAS <inquires@accessni.ca>`; other email types use `RESEND_FROM`, with the legacy `SMTP_FROM` variable accepted as a fallback. The API sends over HTTPS, which works on Railway Hobby where outbound SMTP is disabled. Membership request notifications go to `members@accessni.ca` by default; change this with `ADMIN_NOTIFICATION_EMAIL`.
+Configure `RESEND_API_KEY` with the Resend API key and `RESEND_FROM` with a sender address on a domain verified in Resend. Contact-form emails always use `DMWAS <inquiries@accessni.ca>`; other email types use `RESEND_FROM`, with the legacy `SMTP_FROM` variable accepted as a fallback. The API sends over HTTPS, which works on Railway Hobby where outbound SMTP is disabled. Membership request notifications go to `members@accessni.ca` by default; change this with `ADMIN_NOTIFICATION_EMAIL`.
 
 Password-reset verification codes are sent to the account email address. Codes are six digits, expire after 10 minutes, are single-use, and are limited to five attempts; new code requests are limited to one per account per minute. Reset requests use a generic response to avoid confirming whether an email address has an account. When Resend settings are absent, accounts and reset requests continue to work, but email is skipped and logged.
 

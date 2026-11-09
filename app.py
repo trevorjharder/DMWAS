@@ -460,11 +460,11 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             )
             try:
                 sent = _send_resend_email(
-                    "inquires@accessni.ca",
+                    "inquiries@accessni.ca",
                     f"Contact form: {contact_values['subject']}",
                     email_text,
                     reply_to=contact_values["email"],
-                    from_address="DMWAS <inquires@accessni.ca>",
+                    from_address="DMWAS <inquiries@accessni.ca>",
                 )
             except HTTPError as error:
                 detail = error.read().decode("utf-8", errors="replace")
