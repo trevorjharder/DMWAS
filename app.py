@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import os
 import re
 import secrets
-import smtplib
 import threading
 from datetime import date, datetime, timedelta, timezone
-from email.message import EmailMessage
 from functools import wraps
 from pathlib import Path
 from typing import Callable, TypeVar, cast
+from urllib import request as urllib_request
 
 import click
 from flask import (
@@ -237,69 +237,59 @@ def _password_reset_code_hash(secret_key: str, email: str, code: str) -> str:
     return hmac.new(secret_key.encode("utf-8"), message, hashlib.sha256).hexdigest()
 
 
-def _send_password_reset_code(user: User, code: str) -> None:
-    """Send the password-reset verification code using the configured SMTP server."""
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_from = os.environ.get("SMTP_FROM")
-    if not smtp_host or not smtp_from:
+def _send_resend_email(recipient: str, subject: str, text: str) -> None:
+    """Send a plain-text email through Resend's HTTPS API."""
+    api_key = os.environ.get("RESEND_API_KEY")
+    sender = os.environ.get("RESEND_FROM") or os.environ.get("SMTP_FROM")
+    if not api_key or not sender:
         logging.getLogger(__name__).info(
-            "SMTP is not configured; skipped password reset email."
+            "Resend is not configured; skipped email delivery."
         )
         return
 
-    message = EmailMessage()
-    message["Subject"] = "Your DMWAS password reset code"
-    message["From"] = smtp_from
-    message["To"] = user.email
-    message.set_content(
-        f"Hello {user.full_name},\n\n"
-        f"Your password reset code is: {code}\n\n"
-        "This code expires in 10 minutes and can only be used once. "
-        "If you did not request a password reset, you can ignore this email."
+    payload = json.dumps(
+        {"from": sender, "to": [recipient], "subject": subject, "text": text}
+    ).encode("utf-8")
+    resend_request = urllib_request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
     )
+    with urllib_request.urlopen(resend_request, timeout=10) as response:
+        response.read()
 
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
-        if os.environ.get("SMTP_USE_TLS", "true").lower() == "true":
-            smtp.starttls()
-        smtp_username = os.environ.get("SMTP_USERNAME")
-        smtp_password = os.environ.get("SMTP_PASSWORD")
-        if smtp_username and smtp_password:
-            smtp.login(smtp_username, smtp_password)
-        smtp.send_message(message)
+
+def _send_password_reset_code(user: User, code: str) -> None:
+    """Send the password-reset verification code through Resend."""
+    _send_resend_email(
+        user.email,
+        "Your DMWAS password reset code",
+        (
+            f"Hello {user.full_name},\n\n"
+            f"Your password reset code is: {code}\n\n"
+            "This code expires in 10 minutes and can only be used once. "
+            "If you did not request a password reset, you can ignore this email."
+        ),
+    )
 
 
 def _send_request_notification(user: User) -> None:
-    """Send an optional SMTP notification when mail settings are configured."""
-    smtp_host = os.environ.get("SMTP_HOST")
-    smtp_from = os.environ.get("SMTP_FROM")
-    if not smtp_host or not smtp_from:
-        logging.getLogger(__name__).info(
-            "SMTP is not configured; skipped membership request notification."
-        )
-        return
-
-    message = EmailMessage()
-    message["Subject"] = "New DMWAS membership access request"
-    message["From"] = smtp_from
-    message["To"] = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "members@accessni.ca")
-    message.set_content(
-        "A membership access request is waiting for review.\n\n"
-        f"Name: {user.full_name}\n"
-        f"Email: {user.email}\n"
-        f"Username: {user.username}\n\n"
-        "Sign in to the Society website's admin area to review it."
+    """Send an optional membership request notification through Resend."""
+    _send_resend_email(
+        os.environ.get("ADMIN_NOTIFICATION_EMAIL", "members@accessni.ca"),
+        "New DMWAS membership access request",
+        (
+            "A membership access request is waiting for review.\n\n"
+            f"Name: {user.full_name}\n"
+            f"Email: {user.email}\n"
+            f"Username: {user.username}\n\n"
+            "Sign in to the Society website's admin area to review it."
+        ),
     )
-
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
-        if os.environ.get("SMTP_USE_TLS", "true").lower() == "true":
-            smtp.starttls()
-        smtp_username = os.environ.get("SMTP_USERNAME")
-        smtp_password = os.environ.get("SMTP_PASSWORD")
-        if smtp_username and smtp_password:
-            smtp.login(smtp_username, smtp_password)
-        smtp.send_message(message)
 
 
 def create_app(test_config: dict[str, object] | None = None) -> Flask:
@@ -475,7 +465,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     db.session.commit()
                     try:
                         _send_password_reset_code(user, code)
-                    except (OSError, smtplib.SMTPException, ValueError):
+                    except (OSError, ValueError):
                         app.logger.exception("Could not send password reset code")
 
             flash(
@@ -709,7 +699,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
 
             try:
                 _send_request_notification(user)
-            except (OSError, smtplib.SMTPException, ValueError):
+            except (OSError, ValueError):
                 app.logger.exception("Could not send membership request notification")
             flash("Your membership application has been received. Sign-in will be available after Society approval.", "success")
             return redirect(url_for("login"))

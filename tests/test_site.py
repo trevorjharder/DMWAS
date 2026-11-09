@@ -92,6 +92,45 @@ def test_post_without_csrf_is_rejected(client):
     assert response.status_code == 400
 
 
+def test_password_reset_email_uses_resend_https_api(monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_api_key")
+    monkeypatch.setenv("RESEND_FROM", "DMWAS <noreply@example.test>")
+    calls = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"id":"email-id"}'
+
+    def fake_urlopen(request, timeout):
+        calls.append((request, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr(app_module.urllib_request, "urlopen", fake_urlopen)
+    member = User(
+        full_name="Test Member",
+        email="member@example.test",
+        username="testmember",
+    )
+
+    app_module._send_password_reset_code(member, "123456")
+
+    request, timeout = calls[0]
+    payload = app_module.json.loads(request.data)
+    assert request.full_url == "https://api.resend.com/emails"
+    assert request.get_header("Authorization") == "Bearer re_test_api_key"
+    assert timeout == 10
+    assert payload["from"] == "DMWAS <noreply@example.test>"
+    assert payload["to"] == ["member@example.test"]
+    assert payload["subject"] == "Your DMWAS password reset code"
+    assert "123456" in payload["text"]
+
+
 def test_forgot_password_sends_hashed_expiring_code(client, app, monkeypatch):
     sent = []
 

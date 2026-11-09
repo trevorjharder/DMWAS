@@ -9,7 +9,7 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 - Optional volunteer and newsletter preferences, versioned consent records, and membership term/payment history.
 - Member sign-in and a placeholder private member landing page.
 - A protected admin page to approve or decline pending requests.
-- Optional email notification to `members@accessni.ca` when SMTP is configured.
+- Optional email notification to `members@accessni.ca` when Resend is configured.
 - Email verification-code password recovery for account holders.
 - PostgreSQL support for Railway, with SQLite as a local-development default.
 
@@ -41,11 +41,11 @@ The local default database is `dmwas.db` in the project directory. Keep database
 
 The membership application stores date of birth, mailing address, and (for youth applications) parent/guardian contact details. Review and adopt the draft Privacy Information page before collecting this information publicly. Adult/youth eligibility is calculated from date of birth as of the application date; the form does not process the $10 adult membership payment.
 
-### Optional SMTP notifications
+### Email delivery with Resend
 
-Configure `SMTP_HOST`, `SMTP_PORT` (defaults to `587`), `SMTP_FROM`, and optionally `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_USE_TLS` (defaults to `true`). The recipient defaults to `members@accessni.ca`; it can be changed using `ADMIN_NOTIFICATION_EMAIL`. When SMTP settings are absent, requests are saved normally and a message is written to the application log instead of being emailed.
+Configure `RESEND_API_KEY` with the Resend API key and `RESEND_FROM` with a sender address on a domain verified in Resend. The legacy `SMTP_FROM` variable is accepted as a fallback sender name/address. The API sends over HTTPS, which works on Railway Hobby where outbound SMTP is disabled. Membership request notifications go to `members@accessni.ca` by default; change this with `ADMIN_NOTIFICATION_EMAIL`.
 
-The same SMTP settings send password-reset verification codes to the account email address. Codes are six digits, expire after 10 minutes, are single-use, and are limited to five attempts; new code requests are limited to one per account per minute. Configure Resend SMTP credentials in Railway (`SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USERNAME=resend`, `SMTP_PASSWORD` set to the Resend API key, `SMTP_USE_TLS=true`) and use a Resend-verified sender address for `SMTP_FROM`. Reset requests use a generic response to avoid confirming whether an email address has an account.
+Password-reset verification codes are sent to the account email address. Codes are six digits, expire after 10 minutes, are single-use, and are limited to five attempts; new code requests are limited to one per account per minute. Reset requests use a generic response to avoid confirming whether an email address has an account. When Resend settings are absent, accounts and reset requests continue to work, but email is skipped and logged.
 
 ### Public contact settings
 
