@@ -46,16 +46,11 @@ a:hover {
   font-weight: 700;
   line-height: 1.25;
 }
-.brand__mark {
-  display: grid;
-  place-items: center;
-  min-width: 3.2rem;
-  height: 3.2rem;
-  border-radius: 50%;
-  background: var(--forest);
-  color: white;
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
+.brand__logo {
+  width: 4rem;
+  height: 4rem;
+  flex: 0 0 4rem;
+  object-fit: contain;
 }
 .site-nav {
   display: flex;
