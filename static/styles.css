@@ -90,18 +90,6 @@ a:hover {
   border: 1px solid var(--forest);
   border-radius: 0.45rem;
 }
-.nav-cta {
-  padding: 0.55rem 0.85rem;
-  border: 1px solid var(--forest);
-  border-radius: 0.45rem;
-  background: var(--forest);
-  color: white !important;
-}
-.site-nav a.nav-cta:hover {
-  background: var(--forest-dark);
-  color: white;
-  text-decoration: none;
-}
 .member-nav {
   border-bottom: 1px solid var(--line);
   background: var(--sand);
