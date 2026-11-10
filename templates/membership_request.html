@@ -146,6 +146,12 @@
       </label>
 
       <h2>Membership agreement</h2>
+      <p class="form-hint">
+        Please review the Society's governing documents before accepting:
+        <a href="{{ url_for('static', filename='Constitution of the District of Mount Waddington Access Society.pdf') }}" target="_blank" rel="noopener">Constitution</a>
+        and
+        <a href="{{ url_for('static', filename='Bylaws of the District of Mount_Waddington_Access_Society.pdf') }}" target="_blank" rel="noopener">Bylaws</a>.
+      </p>
       <label class="check-label">
         <input type="checkbox" name="agree_membership_support" value="yes" required {% if request.form.get('agree_membership_support') == 'yes' %}checked{% endif %} />
         I agree to support the purposes of the Mount Waddington Access Society and comply with its constitution and bylaws.
@@ -207,19 +213,21 @@
         required
       />
       <p class="form-hint">
-        Passwords must be at least 12 characters. Your website account remains
-        pending until the Society approves your application.
+        Passwords must be at least 12 characters. Your account will remain
+        pending until your dues have been paid.
+      </p>
+      <p class="form-hint">
+        <strong>
+          Adult membership dues are $10 per year. Please send payment by Interac
+          e-Transfer to
+          <a href="mailto:membership@accessni.ca">membership@accessni.ca</a>.
+          Adult membership will not be approved until payment has been received.
+          Youth membership is free.
+        </strong>
       </p>
       <button class="button button--primary button--full" type="submit">
         Submit membership application
       </button>
-      <p class="form-hint">
-        Adult membership dues are $10 per year. Please send payment by Interac
-        e-Transfer to
-        <a href="mailto:membership@accessni.ca">membership@accessni.ca</a>.
-        Adult membership will not be approved until payment has been received.
-        Youth membership is free.
-      </p>
     </form>
     <script>
       (() => {
