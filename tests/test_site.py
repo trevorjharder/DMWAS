@@ -449,7 +449,17 @@ def test_forgot_password_response_does_not_disclose_unknown_email(
     assert len(sent) == 1
 
 
-def test_access_request_stores_hash_and_is_not_login_enabled(client, app):
+def test_access_request_stores_hash_and_is_not_login_enabled(
+    client, app, monkeypatch
+):
+    monkeypatch.setenv("ADMIN_NOTIFICATION_EMAIL", "members@example.test")
+    sent = []
+
+    def fake_send(recipient, subject, text, reply_to=None, from_address=None):
+        sent.append((recipient, subject, text, reply_to, from_address))
+        return True
+
+    monkeypatch.setattr(app_module, "_send_resend_email", fake_send)
     set_csrf(client)
     response = client.post(
         "/membership/request",
@@ -477,6 +487,15 @@ def test_access_request_stores_hash_and_is_not_login_enabled(client, app):
         },
     )
     assert response.status_code == 302
+    assert [email[0] for email in sent] == [
+        "members@example.test",
+        "member@example.test",
+    ]
+    assert sent[1][1] == "Thank you for your DMWAS membership application"
+    assert "Thank you for creating an account" in sent[1][2]
+    assert "$10" in sent[1][2]
+    assert "membership@accessni.ca" in sent[1][2]
+    assert "remain pending until the Society receives payment and approves" in sent[1][2]
 
     with app.app_context():
         member = User.query.filter_by(username="testmember").one()

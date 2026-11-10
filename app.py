@@ -304,6 +304,36 @@ def _send_request_notification(user: User) -> None:
     )
 
 
+def _send_membership_application_confirmation(user: User) -> None:
+    """Thank an applicant and explain their pending account and dues status."""
+    details = user.membership_details
+    if details and details.membership_type == "adult":
+        membership_status = (
+            "Adult membership has annual dues of $10. Please send payment by "
+            "Interac e-Transfer to membership@accessni.ca. Your account will "
+            "remain pending until the Society receives payment and approves "
+            "your application."
+        )
+    else:
+        membership_status = (
+            "Youth membership is free, so no payment is required. Your account "
+            "will remain pending until the Society reviews and approves your "
+            "application."
+        )
+
+    _send_resend_email(
+        user.email,
+        "Thank you for your DMWAS membership application",
+        (
+            f"Hello {user.full_name},\n\n"
+            "Thank you for creating an account and submitting a membership "
+            "application with the District of Mount Waddington Access Society.\n\n"
+            f"{membership_status}\n\n"
+            "We will notify you when your application has been reviewed."
+        ),
+    )
+
+
 def create_app(test_config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
     secret_key = os.environ.get("SECRET_KEY")
@@ -811,6 +841,22 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 )
             except (OSError, ValueError):
                 app.logger.exception("Could not send membership request notification")
+            try:
+                _send_membership_application_confirmation(user)
+            except HTTPError as error:
+                detail = error.read().decode("utf-8", errors="replace")
+                request_id = error.headers.get("x-resend-id", "unknown")
+                app.logger.error(
+                    "Resend rejected membership application confirmation: HTTP %s, "
+                    "request id %s, response %s",
+                    error.code,
+                    request_id,
+                    detail,
+                )
+            except (OSError, ValueError):
+                app.logger.exception(
+                    "Could not send membership application confirmation"
+                )
             flash("Your membership application has been received. Sign-in will be available after Society approval.", "success")
             return redirect(url_for("login"))
 
