@@ -334,6 +334,19 @@ def _send_membership_application_confirmation(user: User) -> None:
     )
 
 
+def _send_membership_approval_notification(user: User) -> None:
+    """Notify a member that their account has been approved."""
+    _send_resend_email(
+        user.email,
+        "Congratulations—your DMWAS membership has been approved",
+        (
+            f"Hello {user.full_name},\n\n"
+            "Congratulations your membership has been approved. Your account "
+            "is now active, and you can sign in to access the member area."
+        ),
+    )
+
+
 def create_app(test_config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
     secret_key = os.environ.get("SECRET_KEY")
@@ -1035,6 +1048,20 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         )
         user.status = "active"
         db.session.commit()
+        try:
+            _send_membership_approval_notification(user)
+        except HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")
+            request_id = error.headers.get("x-resend-id", "unknown")
+            app.logger.error(
+                "Resend rejected membership approval notification: HTTP %s, "
+                "request id %s, response %s",
+                error.code,
+                request_id,
+                detail,
+            )
+        except (OSError, ValueError):
+            app.logger.exception("Could not send membership approval notification")
         flash(f"Access approved for {user.username}.", "success")
         return redirect(url_for("admin_requests"))
 

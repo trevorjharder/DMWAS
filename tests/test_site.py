@@ -540,6 +540,69 @@ def test_access_request_stores_hash_and_is_not_login_enabled(
     assert member_id is not None
 
 
+def test_approval_sends_confirmation_to_member_after_access_is_granted(
+    client, app, monkeypatch
+):
+    sent = []
+
+    def fake_send(recipient, subject, text, reply_to=None, from_address=None):
+        sent.append((recipient, subject, text, reply_to, from_address))
+        return True
+
+    monkeypatch.setattr(app_module, "_send_resend_email", fake_send)
+    with app.app_context():
+        admin = User(
+            full_name="Society administrator",
+            email="admin@example.test",
+            username="siteadmin",
+            status="active",
+            is_admin=True,
+        )
+        admin.set_password("Admin-Password-Here-1")
+        member = User(
+            full_name="Test Member",
+            email="member@example.test",
+            username="testmember",
+            status="pending",
+        )
+        member.set_password("Member-Password-Here-1")
+        member.membership_details = MembershipDetails(
+            first_name="Test",
+            last_name="Member",
+            community="Port McNeill",
+            date_of_birth=date(1990, 1, 1),
+            age_19_or_older=True,
+            mailing_address="123 Main Street",
+            membership_type="adult",
+            activities=[],
+        )
+        db.session.add_all([admin, member])
+        db.session.commit()
+        admin_id = admin.id
+        member_id = member.id
+
+    login_as(client, admin_id)
+    response = client.post(
+        f"/admin/requests/{member_id}/approve",
+        data={"csrf_token": "test-csrf-token"},
+    )
+    assert response.status_code == 302
+    assert sent == []
+
+    response = client.post(
+        f"/admin/requests/{member_id}/approve",
+        data={"csrf_token": "test-csrf-token", "checks_confirmed": "yes"},
+    )
+    assert response.status_code == 302
+    assert len(sent) == 1
+    assert sent[0][0] == "member@example.test"
+    assert sent[0][1] == "Congratulations—your DMWAS membership has been approved"
+    assert "Congratulations your membership has been approved" in sent[0][2]
+    assert "account is now active" in sent[0][2]
+    with app.app_context():
+        assert db.session.get(User, member_id).status == "active"
+
+
 def test_admin_can_approve_request_and_member_can_sign_in(client, app):
     with app.app_context():
         admin = User(
@@ -1029,7 +1092,17 @@ def test_youth_application_requires_guardian_consent(client, app):
         assert User.query.count() == 0
 
 
-def test_youth_application_records_guardian_consent_and_waived_dues(client, app):
+def test_youth_application_records_guardian_consent_and_waived_dues(
+    client, app, monkeypatch
+):
+    monkeypatch.setenv("ADMIN_NOTIFICATION_EMAIL", "members@example.test")
+    sent = []
+
+    def fake_send(recipient, subject, text, reply_to=None, from_address=None):
+        sent.append((recipient, subject, text, reply_to, from_address))
+        return True
+
+    monkeypatch.setattr(app_module, "_send_resend_email", fake_send)
     set_csrf(client)
     response = client.post(
         "/membership/request",
@@ -1058,6 +1131,10 @@ def test_youth_application_records_guardian_consent_and_waived_dues(client, app)
         },
     )
     assert response.status_code == 302
+    assert sent[1][0] == "youth@example.test"
+    assert "Youth membership is free" in sent[1][2]
+    assert "no payment is required" in sent[1][2]
+    assert "$10" not in sent[1][2]
 
     with app.app_context():
         member = User.query.filter_by(username="youthapplicant").one()
