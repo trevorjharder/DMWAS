@@ -1,0 +1,229 @@
+{% extends "base.html" %} {% block content %}
+<header class="member-detail__heading">
+  <div>
+    <p class="eyebrow">Administration · Member record</p>
+    <h1>{{ member.full_name }}</h1>
+    <p class="member-detail__meta">
+      Member ID <strong>{{ member.member_number }}</strong>
+      <span aria-hidden="true">·</span>
+      Account created {{ member.created_at.strftime('%Y-%m-%d') if
+      member.created_at else 'date unavailable' }}
+    </p>
+  </div>
+  <a class="button button--secondary" href="{{ url_for('admin_members') }}"
+    >Back to manage members</a
+  >
+</header>
+
+<div class="member-detail">
+  <div class="member-detail__grid">
+    <section class="member-detail__card">
+      <h2>Account and contact</h2>
+      <dl class="member-detail__fields">
+        <div class="member-detail__field">
+          <dt>Account status</dt>
+          <dd>
+            <span class="status-pill status-pill--{{ member.status }}"
+              >{{ member.status|capitalize }}</span
+            >
+          </dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Username</dt>
+          <dd>{{ member.username }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Email</dt>
+          <dd><a href="mailto:{{ member.email }}">{{ member.email }}</a></dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Phone</dt>
+          <dd>{{ member.phone or 'Not provided' }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section
+      class="member-detail__card member-detail__eligibility {% if voting_eligibility %}member-detail__eligibility--yes{% elif voting_eligibility is not none %}member-detail__eligibility--no{% endif %}"
+    >
+      <h2>Voting eligibility</h2>
+      {% if voting_eligibility is none %}
+      <p class="member-detail__eligibility-status">Unable to determine</p>
+      <p>No date of birth is on file.</p>
+      {% elif voting_eligibility %}
+      <p class="member-detail__eligibility-status">Eligible to vote</p>
+      <p>Meets the age and account approval requirements.</p>
+      {% else %}
+      <p class="member-detail__eligibility-status">Not eligible to vote</p>
+      <p>Voting requires age 19 or older and an approved account.</p>
+      {% endif %}
+    </section>
+
+    {% if member.membership_details %} {% set details =
+    member.membership_details %}
+    <section class="member-detail__card member-detail__card--wide">
+      <h2>Membership application details</h2>
+      <dl class="member-detail__fields">
+        <div class="member-detail__field">
+          <dt>First name</dt>
+          <dd>{{ details.first_name }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Last name</dt>
+          <dd>{{ details.last_name }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Community of residence</dt>
+          <dd>{{ details.community }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Date of birth</dt>
+          <dd>{{ details.date_of_birth.strftime('%Y-%m-%d') }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Age 19 or older</dt>
+          <dd>{{ 'Yes' if details.age_19_or_older else 'No' }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Requested membership type</dt>
+          <dd>
+            {{ 'Adult — $10/year' if details.membership_type == 'adult' else
+            'Youth — Free' }}
+          </dd>
+        </div>
+        <div class="member-detail__field member-detail__field--wide">
+          <dt>Mailing address</dt>
+          <dd>{{ details.mailing_address }}</dd>
+        </div>
+        <div class="member-detail__field member-detail__field--wide">
+          <dt>Outdoor activities</dt>
+          <dd>
+            {{ details.activities|join(', ') if details.activities else 'None
+            selected' }}
+          </dd>
+        </div>
+      </dl>
+    </section>
+    {% else %}
+    <section class="member-detail__card member-detail__card--wide">
+      <h2>Membership application details</h2>
+      <p class="member-detail__empty">
+        This account predates the membership application form; these details
+        were not collected.
+      </p>
+    </section>
+    {% endif %} {% if member.membership_preferences %} {% set preferences =
+    member.membership_preferences %}
+    <section class="member-detail__card">
+      <h2>Volunteer and communication preferences</h2>
+      <dl class="member-detail__fields member-detail__fields--single">
+        <div class="member-detail__field">
+          <dt>Volunteer interests</dt>
+          <dd>
+            {{ preferences.volunteer_interests|join(', ') if
+            preferences.volunteer_interests else 'None selected' }}
+          </dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Contact about volunteer opportunities</dt>
+          <dd>{{ 'Yes' if preferences.volunteer_contact_ok else 'No' }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Newsletter opt-in</dt>
+          <dd>{{ 'Yes' if preferences.newsletter_opt_in else 'No' }}</dd>
+        </div>
+        {% if preferences.guardian_name %}
+        <div class="member-detail__field">
+          <dt>Parent/guardian name</dt>
+          <dd>{{ preferences.guardian_name }}</dd>
+        </div>
+        <div class="member-detail__field">
+          <dt>Parent/guardian email</dt>
+          <dd>
+            <a href="mailto:{{ preferences.guardian_email }}"
+              >{{ preferences.guardian_email }}</a
+            >
+          </dd>
+        </div>
+        {% endif %}
+      </dl>
+    </section>
+    {% endif %}
+
+    <section class="member-detail__card">
+      <h2>Consent record</h2>
+      {% if member.consent_records %}
+      <ul class="member-detail__consents">
+        {% for consent in member.consent_records %}
+        <li>
+          <strong
+            >{{ consent.consent_type|replace('_', ' ')|capitalize }}</strong
+          >
+          <span
+            >{{ 'Granted' if consent.granted else 'Not granted' }} · {{
+            consent.version }}</span
+          >
+          <span>{{ consent.accepted_at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+          {% if consent.consented_by %}<span
+            >Confirmed by {{ consent.consented_by }}</span
+          >{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="member-detail__empty">No consent records are available.</p>
+      {% endif %}
+    </section>
+
+    <section class="member-detail__card member-detail__card--wide">
+      <h2>Membership and payment history</h2>
+      {% if terms %}
+      <div class="table-scroll">
+        <table class="member-table">
+          <thead>
+            <tr>
+              <th scope="col">Term</th>
+              <th scope="col">Membership type</th>
+              <th scope="col">Approval date</th>
+              <th scope="col">Start date</th>
+              <th scope="col">Expiry date</th>
+              <th scope="col">Annual dues</th>
+              <th scope="col">Payment status</th>
+              <th scope="col">Payment date</th>
+              <th scope="col">Payment reference</th>
+              <th scope="col">Voting eligibility at term start</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for term in terms %}
+            <tr>
+              <td>{{ term.term_number }}</td>
+              <td>{{ term.membership_type|capitalize }}</td>
+              <td>{{ term.approval_date.strftime('%Y-%m-%d') }}</td>
+              <td>{{ term.start_date.strftime('%Y-%m-%d') }}</td>
+              <td>{{ term.expiry_date.strftime('%Y-%m-%d') }}</td>
+              <td>${{ '%.2f'|format(term.annual_dues_cents / 100) }}</td>
+              <td>{{ term.payment_status|capitalize }}</td>
+              <td>
+                {{ term.payment_date.strftime('%Y-%m-%d') if term.payment_date
+                else '—' }}
+              </td>
+              <td>{{ term.payment_reference or '—' }}</td>
+              <td>
+                {% if term.voting_eligible is none %}Unknown{% elif
+                term.voting_eligible %}Eligible{% else %}Not eligible{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="member-detail__empty">
+        No membership terms or payments are recorded.
+      </p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Members</p>
+  <h1>Search members</h1>
+  <p>Find an active member by name.</p>
+</section>
+<section class="directory-section">
+  <form
+    class="directory-search"
+    method="get"
+    action="{{ url_for('member_search') }}"
+  >
+    <label for="member-query">Member name</label>
+    <div class="directory-search__controls">
+      <input
+        id="member-query"
+        name="q"
+        type="search"
+        value="{{ query }}"
+        maxlength="120"
+        autocomplete="off"
+      />
+      <button class="button button--primary" type="submit">Search</button>
+    </div>
+  </form>
+
+  {% if query %}
+  <div class="directory-results" aria-live="polite">
+    {% if members %}
+    <h2>Search results</h2>
+    <ul>
+      {% for member in members %}
+      <li>{{ member.full_name }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No active members matched “{{ query }}”.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

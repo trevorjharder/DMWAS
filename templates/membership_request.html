@@ -2,10 +2,10 @@
 <section class="auth-layout">
   <div class="auth-card auth-card--wide">
     <p class="eyebrow">Membership</p>
-    <h1>Request member access</h1>
+    <h1>Membership application</h1>
     <p>
-      Requests are reviewed by the Society. You will not be able to sign in
-      until access is approved.
+      Complete the application below. Applications are reviewed by the Society;
+      you will not be able to sign in until access is approved.
     </p>
     <form method="post">
       <input
@@ -13,16 +13,26 @@
         name="csrf_token"
         value="{{ session.get('csrf_token', '') }}"
       />
-      <label for="full_name">Full name</label>
+      <h2>Personal information</h2>
+      <label for="first_name">First name</label>
       <input
-        id="full_name"
-        name="full_name"
-        autocomplete="name"
-        maxlength="120"
+        id="first_name"
+        name="first_name"
+        autocomplete="given-name"
+        maxlength="60"
         required
-        value="{{ request.form.get('full_name', '') }}"
+        value="{{ request.form.get('first_name', '') }}"
       />
-      <label for="email">Email</label>
+      <label for="last_name">Last name</label>
+      <input
+        id="last_name"
+        name="last_name"
+        autocomplete="family-name"
+        maxlength="60"
+        required
+        value="{{ request.form.get('last_name', '') }}"
+      />
+      <label for="email">Email address</label>
       <input
         id="email"
         name="email"
@@ -33,7 +43,7 @@
         value="{{ request.form.get('email', '') }}"
       />
       <label for="phone"
-        >Phone number <span class="label-note">(optional)</span></label
+        >Phone number</label
       >
       <input
         id="phone"
@@ -41,8 +51,138 @@
         type="tel"
         autocomplete="tel"
         maxlength="40"
+        required
         value="{{ request.form.get('phone', '') }}"
       />
+      <label for="community">Community of residence</label>
+      <input
+        id="community"
+        name="community"
+        autocomplete="address-level2"
+        maxlength="120"
+        required
+        value="{{ request.form.get('community', '') }}"
+      />
+      <label for="date_of_birth">Date of birth</label>
+      <input
+        id="date_of_birth"
+        name="date_of_birth"
+        type="date"
+        autocomplete="bday"
+        required
+        value="{{ request.form.get('date_of_birth', '') }}"
+      />
+      <p class="form-hint">Your date of birth is used to determine youth or adult membership eligibility.</p>
+      <label for="mailing_address">Mailing address</label>
+      <input
+        id="mailing_address"
+        name="mailing_address"
+        type="text"
+        autocomplete="street-address"
+        maxlength="500"
+        required
+        value="{{ request.form.get('mailing_address', '') }}"
+      />
+
+      <h2>Membership information</h2>
+      <fieldset class="form-options">
+        <legend>Select your membership type</legend>
+        <label class="check-label">
+          <input type="radio" name="membership_type" value="adult" required {% if request.form.get('membership_type') == 'adult' %}checked{% endif %} />
+          Adult Membership (19+) — $10/year
+        </label>
+        <label class="check-label">
+          <input type="radio" name="membership_type" value="youth" required {% if request.form.get('membership_type') == 'youth' %}checked{% endif %} />
+          Youth Membership (under 19) — Free
+        </label>
+      </fieldset>
+      <p class="form-hint">This form records your membership choice; it does not collect payment.</p>
+      <fieldset class="form-options">
+        <legend>What outdoor activities interest you?</legend>
+        <p class="form-hint">Optional — select all that apply.</p>
+        {% for activity in ['Rock climbing', 'Bouldering', 'Hiking', 'Mountaineering', 'Trail development and maintenance', 'Outdoor education'] %}
+        <label class="check-label">
+          <input type="checkbox" name="activities" value="{{ activity }}" {% if activity in request.form.getlist('activities') %}checked{% endif %} />
+          {{ activity }}
+        </label>
+        {% endfor %}
+      </fieldset>
+
+      <h2>Volunteering</h2>
+      <fieldset class="form-options">
+        <legend>Would you be interested in volunteering?</legend>
+        <p class="form-hint">Optional — select all that apply. This does not commit you to volunteering.</p>
+        {% for interest in ['Indoor climbing wall operations', 'Outdoor trail maintenance', 'Climbing route development', 'Fundraising and community events', 'Administrative or organizational work'] %}
+        <label class="check-label">
+          <input type="checkbox" name="volunteer_interests" value="{{ interest }}" {% if interest in request.form.getlist('volunteer_interests') %}checked{% endif %} />
+          {{ interest }}
+        </label>
+        {% endfor %}
+        <label class="check-label">
+          <input type="checkbox" name="volunteer_interests" value="not_at_this_time" {% if 'not_at_this_time' in request.form.getlist('volunteer_interests') %}checked{% endif %} />
+          Not at this time
+        </label>
+      </fieldset>
+      <fieldset class="form-options">
+        <legend>Would you like to be contacted about volunteer opportunities?</legend>
+        <label class="check-label">
+          <input type="radio" name="volunteer_contact_ok" value="yes" required {% if request.form.get('volunteer_contact_ok') == 'yes' %}checked{% endif %} />
+          Yes
+        </label>
+        <label class="check-label">
+          <input type="radio" name="volunteer_contact_ok" value="no" required {% if request.form.get('volunteer_contact_ok') == 'no' %}checked{% endif %} />
+          No
+        </label>
+      </fieldset>
+
+      <h2>Communication preferences</h2>
+      <label class="check-label">
+        <input type="checkbox" name="essential_communications" value="yes" required {% if request.form.get('essential_communications') == 'yes' %}checked{% endif %} />
+        I understand that the Society may contact me about my membership, renewals, and required Society notices.
+      </label>
+      <label class="check-label">
+        <input type="checkbox" name="newsletter_opt_in" value="yes" {% if request.form.get('newsletter_opt_in') == 'yes' %}checked{% endif %} />
+        I would like to receive newsletters, event announcements, and updates about Society projects.
+      </label>
+
+      <h2>Membership agreement</h2>
+      <p class="form-hint">
+        Please review the Society's governing documents before accepting:
+        <a href="{{ url_for('static', filename='Constitution of the District of Mount Waddington Access Society.pdf') }}" target="_blank" rel="noopener">Constitution</a>
+        and
+        <a href="{{ url_for('static', filename='Bylaws of the District of Mount_Waddington_Access_Society.pdf') }}" target="_blank" rel="noopener">Bylaws</a>.
+      </p>
+      <label class="check-label">
+        <input type="checkbox" name="agree_membership_support" value="yes" required {% if request.form.get('agree_membership_support') == 'yes' %}checked{% endif %} />
+        I agree to support the purposes of the Mount Waddington Access Society and comply with its constitution and bylaws.
+      </label>
+      <label class="check-label">
+        <input type="checkbox" name="acknowledge_approval" value="yes" required {% if request.form.get('acknowledge_approval') == 'yes' %}checked{% endif %} />
+        I understand that membership is subject to approval in accordance with the Society's bylaws.
+      </label>
+      <label class="check-label">
+        <input type="checkbox" name="acknowledge_privacy" value="yes" required {% if request.form.get('acknowledge_privacy') == 'yes' %}checked{% endif %} />
+        I acknowledge that my personal information will be collected and used to administer my membership as described in the <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">privacy information</a>.
+      </label>
+
+      <fieldset
+        class="form-options"
+        id="guardian-consent-section"
+        {% if request.form.get('membership_type') != 'youth' %}hidden{% endif %}
+      >
+        <legend>Parent or guardian consent for applicants under 19</legend>
+        <p class="form-hint">Required for youth applicants. A parent or guardian must provide their contact details and confirm consent.</p>
+        <label for="guardian_name">Parent or guardian name</label>
+        <input id="guardian_name" name="guardian_name" maxlength="120" autocomplete="name" {% if request.form.get('membership_type') == 'youth' %}required{% endif %} value="{{ request.form.get('guardian_name', '') }}" />
+        <label for="guardian_email">Parent or guardian email</label>
+        <input id="guardian_email" name="guardian_email" type="email" maxlength="254" autocomplete="email" {% if request.form.get('membership_type') == 'youth' %}required{% endif %} value="{{ request.form.get('guardian_email', '') }}" />
+        <label class="check-label">
+          <input type="checkbox" name="guardian_consent" value="yes" {% if request.form.get('membership_type') == 'youth' %}required{% endif %} {% if request.form.get('guardian_consent') == 'yes' %}checked{% endif %} />
+          I am the applicant's parent or guardian and consent to this youth membership application.
+        </label>
+      </fieldset>
+
+      <h2>Member account</h2>
       <label for="username">Choose a username</label>
       <input
         id="username"
@@ -73,13 +213,44 @@
         required
       />
       <p class="form-hint">
-        Passwords must be at least 12 characters. Requests are not active
-        accounts until approved.
+        Passwords must be at least 12 characters. Your account will remain
+        pending until your dues have been paid.
+      </p>
+      <p class="form-hint">
+        <strong>
+          Adult membership dues are $10 per year. Please send payment by Interac
+          e-Transfer to
+          <a href="mailto:membership@accessni.ca">membership@accessni.ca</a>.
+          Adult membership will not be approved until payment has been received.
+          Youth membership is free.
+        </strong>
       </p>
       <button class="button button--primary button--full" type="submit">
-        Submit access request
+        Submit membership application
       </button>
     </form>
+    <script>
+      (() => {
+        const membershipOptions = document.querySelectorAll('input[name="membership_type"]');
+        const guardianSection = document.getElementById("guardian-consent-section");
+        const guardianInputs = guardianSection.querySelectorAll(
+          'input[name="guardian_name"], input[name="guardian_email"], input[name="guardian_consent"]'
+        );
+
+        function updateGuardianSection() {
+          const isYouth = document.querySelector('input[name="membership_type"]:checked')?.value === "youth";
+          guardianSection.hidden = !isYouth;
+          guardianInputs.forEach((input) => {
+            input.required = isYouth;
+          });
+        }
+
+        membershipOptions.forEach((option) => {
+          option.addEventListener("change", updateGuardianSection);
+        });
+        updateGuardianSection();
+      })();
+    </script>
   </div>
 </section>
 {% endblock %}

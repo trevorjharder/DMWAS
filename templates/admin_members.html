@@ -1,0 +1,196 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Administration</p>
+  <h1>Manage members</h1>
+  <p>Review member account details and their current access status.</p>
+</section>
+<section class="directory-section">
+  <div class="directory-heading">
+    <h2>Member accounts</h2>
+    <a class="button button--secondary" href="{{ url_for('admin_requests') }}"
+      >Review access requests</a
+    >
+  </div>
+  {% if members %}
+  <div class="table-scroll">
+    <table class="member-table">
+      <thead>
+        <tr>
+          <th scope="col">Member ID</th>
+          <th scope="col">Name</th>
+          <th scope="col">Email</th>
+          <th scope="col">Username</th>
+          <th scope="col">Status</th>
+          <th scope="col">Voting eligibility</th>
+          <th scope="col">Membership term</th>
+          <th scope="col">Dues / payment</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for member in members %} {% set term = latest_terms.get(member.id) %}
+        {% set history = membership_histories.get(member.id, []) %}
+        <tr>
+          <td>
+            {% if member.id == current_user.id %} {{ member.member_number }} {%
+            else %}
+            <a href="{{ url_for('admin_member_detail', user_id=member.id) }}">
+              {{ member.member_number }}
+            </a>
+            {% endif %}
+          </td>
+          <td>
+            {{ member.full_name }} {% if member.is_admin %}<span
+              class="status-pill"
+              >Administrator</span
+            >{% endif %}
+          </td>
+          <td><a href="mailto:{{ member.email }}">{{ member.email }}</a></td>
+          <td>{{ member.username }}</td>
+          <td>
+            <span class="status-pill status-pill--{{ member.status }}"
+              >{{ member.status|capitalize }}</span
+            >
+          </td>
+          <td>
+            {% if voting_eligibility.get(member.id) is none %} Cannot determine
+            — date of birth not on file {% elif
+            voting_eligibility.get(member.id) %} Eligible to vote {% else %} Not
+            eligible to vote {% endif %}
+            <p class="form-hint">
+              Eligible when age 19 or older and account is approved.
+            </p>
+          </td>
+          <td>
+            {% if term %} {{ term.membership_type|capitalize }}<br />
+            {{ term.start_date.strftime('%Y-%m-%d') }} – {{
+            term.expiry_date.strftime('%Y-%m-%d') }} {% if history %}<br />Member
+            since {{ history[0].start_date.strftime('%Y-%m-%d') }}{% endif %} {%
+            if history|length > 1 %}
+            <details>
+              <summary>Term history</summary>
+              <ol>
+                {% for prior_term in history %}
+                <li>
+                  {{ prior_term.start_date.strftime('%Y-%m-%d') }} – {{
+                  prior_term.expiry_date.strftime('%Y-%m-%d') }} · {{
+                  prior_term.status|capitalize }} · ${{
+                  '%.2f'|format(prior_term.annual_dues_cents / 100) }} ({{
+                  prior_term.payment_status }})
+                </li>
+                {% endfor %}
+              </ol>
+            </details>
+            {% endif %} {% else %}Not approved{% endif %}
+          </td>
+          <td>
+            {% if term %} ${{ '%.2f'|format(term.annual_dues_cents / 100) }} ·
+            {{ term.payment_status|capitalize }} {% if term.payment_date %}<br />Paid
+            {{ term.payment_date.strftime('%Y-%m-%d') }}{% endif %} {% else
+            %}—{% endif %}
+          </td>
+          <td>
+            {% if member.is_admin %}
+            <span class="form-hint">Administrator account</span>
+            {% else %} {% if term and term.payment_status == 'unpaid' %}
+            <form
+              method="post"
+              action="{{ url_for('record_membership_payment', user_id=member.id) }}"
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <label for="payment_reference_{{ member.id }}"
+                >Payment reference
+                <span class="label-note">(optional)</span></label
+              >
+              <input
+                id="payment_reference_{{ member.id }}"
+                name="payment_reference"
+                maxlength="255"
+              />
+              <button class="button button--secondary" type="submit">
+                Record payment
+              </button>
+            </form>
+            {% endif %} {% if member.status == 'expired' %}
+            <form
+              method="post"
+              action="{{ url_for('renew_membership', user_id=member.id) }}"
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <button class="button button--primary" type="submit">
+                Renew one-year term
+              </button>
+            </form>
+            {% endif %} {% if member.status == 'active' %}
+            <form
+              method="post"
+              action="{{ url_for('make_member_admin', user_id=member.id) }}"
+              onsubmit="
+                return confirm(
+                  'Grant administrator access to this member? They will be able to manage all member records and access requests.',
+                );
+              "
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <button class="button button--secondary" type="submit">
+                Make administrator
+              </button>
+            </form>
+            {% endif %}
+            <form
+              method="post"
+              action="{{ url_for('delete_member', user_id=member.id) }}"
+              onsubmit="
+                return confirm(
+                  'WARNING: Permanently delete this member and all associated membership, payment, consent, and account data? This cannot be undone.',
+                );
+              "
+            >
+              <input
+                type="hidden"
+                name="csrf_token"
+                value="{{ session.get('csrf_token', '') }}"
+              />
+              <button class="button button--danger" type="submit">
+                Permanently delete member
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state"><p>No member accounts to manage yet.</p></div>
+  {% endif %}
+</section>
+<section class="directory-section">
+  <h2>Administrators</h2>
+  {% if administrators %}
+  <ul>
+    {% for administrator in administrators %}
+    <li>
+      {{ administrator.full_name }} —
+      <a href="mailto:{{ administrator.email }}">{{ administrator.email }}</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No administrator accounts.</p>
+  {% endif %}
+</section>
+{% endblock %}

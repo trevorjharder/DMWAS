@@ -18,6 +18,54 @@
         member.phone %} · {{ member.phone }}{% endif %}
       </p>
       <p>Username: <strong>{{ member.username }}</strong></p>
+      {% if member.membership_details %}
+      <p>
+        Community: {{ member.membership_details.community }} · Date of birth: {{
+        member.membership_details.date_of_birth.strftime('%Y-%m-%d') }} · 19 or
+        older: {{ 'Yes' if member.membership_details.age_19_or_older else 'No'
+        }}
+      </p>
+      <p>Mailing address: {{ member.membership_details.mailing_address }}</p>
+      <p>
+        Membership: {{ 'Adult — $10/year' if
+        member.membership_details.membership_type == 'adult' else 'Youth — Free'
+        }}
+      </p>
+      {% if member.membership_details.activities %}
+      <p>Interests: {{ member.membership_details.activities | join(', ') }}</p>
+      {% endif %} {% endif %} {% if member.membership_preferences %}
+      <p>
+        Volunteer interests: {% if
+        member.membership_preferences.volunteer_interests %} {{
+        member.membership_preferences.volunteer_interests | join(', ') }} {%
+        else %}Not at this time{% endif %} · Contact about volunteer
+        opportunities: {{ 'Yes' if
+        member.membership_preferences.volunteer_contact_ok else 'No' }}
+      </p>
+      <p>
+        Newsletter consent: {{ 'Yes' if
+        member.membership_preferences.newsletter_opt_in else 'No' }}
+      </p>
+      {% if member.membership_preferences.guardian_name %}
+      <p>
+        Parent/guardian: {{ member.membership_preferences.guardian_name }} ({{
+        member.membership_preferences.guardian_email }})
+      </p>
+      {% endif %} {% endif %} {% if member.consent_records %}
+      <details>
+        <summary>Consent record versions and timestamps</summary>
+        <ul>
+          {% for consent in member.consent_records %}
+          <li>
+            {{ consent.consent_type|replace('_', ' ')|capitalize }}: {{
+            'granted' if consent.granted else 'not granted' }} ({{
+            consent.version }}, {{ consent.accepted_at.strftime('%Y-%m-%d %H:%M
+            UTC') }})
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
       <p class="form-hint">
         Requested {{ member.created_at.strftime('%Y-%m-%d') if member.created_at
         else 'date unavailable' }}
@@ -40,7 +88,8 @@
             value="yes"
             required
           />
-          I completed the Society's required checks for this request.</label
+          I completed the Society's required checks, including confirming adult
+          dues were received when applicable.</label
         >
         <button class="button button--primary" type="submit">Approve</button>
       </form>

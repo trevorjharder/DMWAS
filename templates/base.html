@@ -18,7 +18,11 @@
   <body>
     <header class="site-header">
       <a class="brand" href="{{ url_for('about') }}">
-        <span class="brand__mark" aria-hidden="true">DMWAS</span>
+        <img
+          class="brand__logo"
+          src="{{ url_for('static', filename='MWAS-Small Logo.png') }}"
+          alt=""
+        />
         <span class="brand__name"
           >District of Mount Waddington<br />Access Society</span
         >
@@ -27,6 +31,7 @@
         <a href="{{ url_for('about') }}">About</a>
         <a href="{{ url_for('notices') }}">Notices</a>
         <a href="{{ url_for('contact') }}">Contact</a>
+        <a href="{{ url_for('donate') }}">Donate</a>
         {% if current_user and current_user.status == 'active' %}
         <a href="{{ url_for('member_home') }}">Member area</a>
         {% if current_user.is_admin %}<a href="{{ url_for('admin_requests') }}"
@@ -41,10 +46,86 @@
           <button class="nav-button" type="submit">Sign out</button>
         </form>
         {% else %}
-        <a class="nav-login" href="{{ url_for('login') }}">Member sign in</a>
+        <a href="{{ url_for('membership_request') }}">Become a member</a>
+        <a class="nav-login" href="{{ url_for('login') }}">Log in</a>
         {% endif %}
       </nav>
     </header>
+
+    {% if current_user and current_user.status == 'active' %} {% set endpoint =
+    request.endpoint or '' %}
+    <nav class="member-nav" aria-label="Member navigation">
+      <div class="member-nav__inner">
+        <a
+          href="{{ url_for('member_home') }}"
+          {%
+          if
+          endpoint
+          in
+          ['member_home']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Member area</a
+        >
+        <a
+          href="{{ url_for('member_resources') }}"
+          {%
+          if
+          endpoint
+          in
+          ['member_resources']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Resources</a
+        >
+        <a
+          href="{{ url_for('member_search') }}"
+          {%
+          if
+          endpoint
+          in
+          ['member_search']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Search Members</a
+        >
+        {% if current_user.is_admin %}
+        <a
+          href="{{ url_for('admin_members') }}"
+          {%
+          if
+          endpoint
+          in
+          ['admin_members']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Manage Members</a
+        >
+        <a
+          href="{{ url_for('admin_requests') }}"
+          {%
+          if
+          endpoint
+          in
+          ['admin_requests', 'approve_request', 'decline_request']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Access Requests</a
+        >
+        {% endif %}
+      </div>
+    </nav>
+    {% endif %}
 
     <main id="main-content">
       {% with messages = get_flashed_messages(with_categories=true) %} {% if
@@ -59,6 +140,7 @@
 
     <footer class="site-footer">
       <span>District of Mount Waddington Access Society</span>
+      <a href="{{ url_for('donate') }}">Donate</a>
       <a href="{{ url_for('contact') }}">Contact</a>
     </footer>
   </body>
