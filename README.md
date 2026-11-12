@@ -22,7 +22,7 @@ Use Python 3.12 or newer.
 1. Create and activate a virtual environment.
 2. Install dependencies with `pip install -r requirements.txt`.
 3. Set `SECRET_KEY` to a strong random value for a stable local session.
-4. Create the initial database schema with `flask --app app init-db`.
+4. Apply the versioned database schema with `flask --app app db upgrade`.
 5. Create the first administrator with `flask --app app create-admin`. The command prompts for a username, email, and password without echoing the password.
 6. Run locally with `flask --app app run --debug`.
 7. Run tests with `pytest`.
@@ -35,9 +35,11 @@ The local default database is `dmwas.db` in the project directory. Keep database
 - Set a stable, private `SECRET_KEY` in Railway variables. Do not rely on the local fallback in production, especially with multiple Gunicorn workers.
 - Set `SESSION_COOKIE_SECURE=true` when the service is served over HTTPS.
 - Deploy this repository; the included `Procfile` starts Gunicorn.
-- The Procfile runs `flask --app app init-db` before Gunicorn starts. The app also creates missing tables on its first request as a fallback if Railway overrides the Procfile. Both paths are additive and safe to rerun; they do not alter or delete existing tables. Confirm Railway's Start Command is unset or uses the repository Procfile.
+- The Procfile runs `flask --app app db upgrade` before Gunicorn starts. Schema changes are managed through reviewed migrations; the app does not create tables at request time. Confirm Railway's Start Command is unset or uses the repository Procfile.
 - Create the initial admin using `flask --app app create-admin` in an authenticated Railway shell. Do not expose administrator signup publicly.
 - Connect `accessNI.ca` in Railway and follow its current domain/DNS instructions. Verify HTTPS before launch.
+
+Before enabling a staging or production deployment, follow [the Community Hub foundation runbook](docs/community_hub_phase_01.md). In particular, existing databases created by `create_all` must be backed up, checked against the initial migration, and deliberately stamped before the migration-based Procfile can start. Do not deploy this change to production until the staging and recovery gate has passed.
 
 The membership application stores date of birth, mailing address, and (for youth applications) parent/guardian contact details. Review and adopt the draft Privacy Information page before collecting this information publicly. Adult/youth eligibility is calculated from date of birth as of the application date; the form does not process the $10 adult membership payment.
 

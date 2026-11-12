@@ -2,6 +2,8 @@ import re
 from io import BytesIO
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 import app as app_module
 from sqlalchemy import inspect
 from werkzeug.security import check_password_hash
@@ -14,6 +16,7 @@ from app import (
     PasswordResetCode,
     User,
     _database_uri,
+    _environment_flag,
     _is_voting_eligible,
     create_app,
     db,
@@ -27,6 +30,59 @@ def test_postgres_urls_select_installed_psycopg2_driver(monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example.test:5432/society")
     assert _database_uri() == "postgresql+psycopg2://user:pass@db.example.test:5432/society"
+
+
+def test_deployed_configuration_requires_secret_postgres_and_secure_cookies(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "staging")
+    monkeypatch.delenv("RAILWAY_PROJECT_ID", raising=False)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example.test/society")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_app()
+
+    monkeypatch.setenv("SECRET_KEY", "short")
+    with pytest.raises(RuntimeError, match="32 characters"):
+        create_app()
+
+    monkeypatch.setenv("SECRET_KEY", "s" * 32)
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///local.db")
+    with pytest.raises(RuntimeError, match="PostgreSQL"):
+        create_app()
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example.test/society")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    with pytest.raises(RuntimeError, match="SESSION_COOKIE_SECURE"):
+        create_app()
+
+
+def test_environment_boolean_rejects_ambiguous_values(monkeypatch):
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "sometimes")
+    with pytest.raises(RuntimeError, match="true or false"):
+        _environment_flag("SESSION_COOKIE_SECURE", False)
+
+
+def test_migration_cli_is_registered(app):
+    result = app.test_cli_runner().invoke(args=["db", "--help"])
+    assert result.exit_code == 0
+    assert "upgrade" in result.output
+    assert "stamp" in result.output
+
+
+def test_synthetic_member_factory_creates_adult_and_youth(app, make_user):
+    with app.app_context():
+        adult = make_user()
+        youth = make_user(
+            birth_date=date(2012, 1, 1),
+            membership_type="youth",
+        )
+        db.session.add_all([adult, youth])
+        db.session.commit()
+
+        assert adult.email.endswith("@example.test")
+        assert adult.membership_details.membership_type == "adult"
+        assert youth.membership_details.membership_type == "youth"
+        assert youth.membership_details.age_19_or_older is False
 
 
 def test_public_pages_render(client):
@@ -638,7 +694,8 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
     login_as(client, admin_id)
     requests_page = client.get("/admin/requests")
     assert requests_page.status_code == 200
-    assert b"confirming adult dues were received when applicable" in requests_page.data
+    normalized_requests_page = re.sub(rb"\s+", b" ", requests_page.data)
+    assert b"confirming adult dues were received when applicable" in normalized_requests_page
     response = client.post(
         f"/admin/requests/{member_id}/approve",
         data={"csrf_token": "test-csrf-token"},
@@ -921,9 +978,11 @@ def test_admin_members_table_includes_admins_except_society_administrator(client
 
     assert response.status_code == 200
     member_table = response.data.split(b"<tbody>", 1)[1].split(b"</tbody>", 1)[0]
+    normalized_member_table = re.sub(rb"\s+", b" ", member_table)
     administrators_section = response.data.split(b"<h2>Administrators</h2>", 1)[1]
     assert b"additional-admin@example.test" in member_table
-    assert b"Administrator</span>" in member_table
+    assert b'class="status-pill"' in normalized_member_table
+    assert b">Administrator " in normalized_member_table
     assert f'href="/admin/members/{table_admin_id}"'.encode() not in member_table
     assert b"tharder@accessni.ca" not in member_table
     assert b"tharder@accessni.ca" in administrators_section
@@ -1248,30 +1307,35 @@ def test_expired_member_is_blocked_and_admin_can_renew(client, app):
         assert terms[1].payment_status == "unpaid"
 
 
-def test_init_db_adds_new_tables_to_existing_schema(tmp_path):
-    legacy_app = create_app(
+def test_migration_stamp_adopts_existing_complete_schema(tmp_path):
+    existing_app = create_app(
         {
             "TESTING": True,
             "SECRET_KEY": "test-secret-key",
-            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{(tmp_path / 'legacy.sqlite').as_posix()}",
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{(tmp_path / 'existing.sqlite').as_posix()}",
         }
     )
-    with legacy_app.app_context():
-        User.__table__.create(db.engine)
-        MembershipDetails.__table__.create(db.engine)
+    with existing_app.app_context():
+        db.create_all()
 
-    result = legacy_app.test_cli_runner().invoke(args=["init-db"])
-    assert result.exit_code == 0, result.output
-    with legacy_app.app_context():
+    runner = existing_app.test_cli_runner()
+    stamped = runner.invoke(args=["db", "stamp", "head"])
+    assert stamped.exit_code == 0, stamped.output
+    checked = runner.invoke(args=["db", "check"])
+    assert checked.exit_code == 0, checked.output
+    upgraded = runner.invoke(args=["db", "upgrade"])
+    assert upgraded.exit_code == 0, upgraded.output
+    with existing_app.app_context():
         table_names = set(inspect(db.engine).get_table_names())
         assert {"membership_preferences", "membership_consent", "membership_term"} <= table_names
+        assert inspect(db.engine).has_table("alembic_version")
 
 
-def test_first_request_creates_missing_membership_tables(client, app):
+def test_first_request_does_not_create_missing_membership_tables(client, app):
     with app.app_context():
         MembershipTerm.__table__.drop(db.engine)
 
     response = client.get("/")
     assert response.status_code == 302
     with app.app_context():
-        assert inspect(db.engine).has_table("membership_term")
+        assert not inspect(db.engine).has_table("membership_term")

@@ -9,7 +9,6 @@ import logging
 import os
 import re
 import secrets
-import threading
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
@@ -30,12 +29,13 @@ from flask import (
     url_for,
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import text
+from flask_migrate import Migrate
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
 db = SQLAlchemy()
+migrate = Migrate()
 F = TypeVar("F", bound=Callable[..., object])
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD_LENGTH = 12
@@ -232,6 +232,26 @@ def _database_uri() -> str:
     return database_url
 
 
+def _environment_flag(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise RuntimeError(f"{name} must be set to true or false.")
+
+
+def _is_deployed_environment() -> bool:
+    environment = os.environ.get("ENVIRONMENT", "").strip().lower()
+    return bool(os.environ.get("RAILWAY_PROJECT_ID")) or environment in {
+        "staging",
+        "production",
+    }
+
+
 def _password_reset_code_hash(secret_key: str, email: str, code: str) -> str:
     """Hash a low-entropy code with the app secret so database leaks don't expose it."""
     message = f"{email.strip().lower()}:{code}".encode("utf-8")
@@ -350,11 +370,6 @@ def _send_membership_approval_notification(user: User) -> None:
 def create_app(test_config: dict[str, object] | None = None) -> Flask:
     app = Flask(__name__)
     secret_key = os.environ.get("SECRET_KEY")
-    if not secret_key and (
-        os.environ.get("RAILWAY_PROJECT_ID")
-        or os.environ.get("ENVIRONMENT", "").lower() == "production"
-    ):
-        raise RuntimeError("SECRET_KEY must be configured in production.")
     app.config.from_mapping(
         SECRET_KEY=secret_key or secrets.token_hex(32),
         SQLALCHEMY_DATABASE_URI=_database_uri(),
@@ -364,35 +379,24 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         PUBLIC_CONTACT_ADDRESS=os.environ.get("PUBLIC_CONTACT_ADDRESS", ""),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "false").lower()
-        == "true",
+        SESSION_COOKIE_SECURE=_environment_flag("SESSION_COOKIE_SECURE", False),
     )
     if test_config:
         app.config.update(test_config)
 
-    db.init_app(app)
-    schema_lock = threading.Lock()
-    schema_initialized = False
+    if _is_deployed_environment() and not app.config.get("TESTING"):
+        if not secret_key:
+            raise RuntimeError("SECRET_KEY must be configured in staging and production.")
+        if len(str(app.config["SECRET_KEY"])) < 32:
+            raise RuntimeError("SECRET_KEY must contain at least 32 characters in deployed environments.")
+        database_uri = str(app.config["SQLALCHEMY_DATABASE_URI"])
+        if not database_uri.startswith(("postgresql+psycopg2://", "postgresql://", "postgres://")):
+            raise RuntimeError("DATABASE_URL must point to PostgreSQL in deployed environments.")
+        if not app.config.get("SESSION_COOKIE_SECURE"):
+            raise RuntimeError("SESSION_COOKIE_SECURE=true is required in staging and production.")
 
-    @app.before_request
-    def initialize_missing_tables() -> None:
-        nonlocal schema_initialized
-        if schema_initialized:
-            return
-        with schema_lock:
-            if schema_initialized:
-                return
-            if db.engine.dialect.name == "postgresql":
-                # Serialize first-request setup across Gunicorn worker processes.
-                with db.engine.begin() as connection:
-                    connection.execute(
-                        text("SELECT pg_advisory_xact_lock(:key)"),
-                        {"key": 4839628471201},
-                    )
-                    db.metadata.create_all(bind=connection)
-            else:
-                db.create_all()
-            schema_initialized = True
+    db.init_app(app)
+    migrate.init_app(app, db, compare_type=True)
 
     @app.before_request
     def protect_post_requests() -> None:
@@ -1141,13 +1145,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         db.session.commit()
         flash(f"Membership renewed for {user.member_number}.", "success")
         return redirect(url_for("admin_members"))
-
-    @app.cli.command("init-db")
-    def init_db_command() -> None:
-        """Create the database tables for a new installation."""
-        with app.app_context():
-            db.create_all()
-        click.echo("Database tables created.")
 
     @app.cli.command("create-admin")
     @click.option("--username", prompt=True)
