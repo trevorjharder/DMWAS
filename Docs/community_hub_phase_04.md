@@ -100,9 +100,24 @@ and deletion with membership preservation. A fresh synthetic SQLite database is
 upgraded from the baseline, checked for schema drift, downgraded with foreign-key
 checking enabled, then upgraded and checked again while preserving its user.
 
-No staging or production database was migrated or deployed during this work.
-Real PostgreSQL migration/recovery and browser/mobile acceptance must still be
-verified in the existing staging environment. The Society must approve its
+The initial implementation did not migrate or deploy a live database. In the
+subsequent owner-authorized repair, the existing Railway **Testing** environment
+was verified to use its matching PostgreSQL service. Its existing schema matched
+the baseline and had no Alembic revision. A PostgreSQL 18 custom-format backup was
+saved to the gitignored `instance/backups/testing-before-phase04-20261114T225337Z.dump`
+(21,883 bytes; SHA-256 `541139dcac9d9f37bc0aa98db38af078bd3f986fd8ef56c6a962d969f391ae93`).
+The archive listing was validated; a full restore rehearsal remains outstanding.
+The verified baseline was stamped `958ef19b9634` and upgraded to `c04f1a2b3d4e`.
+PostgreSQL schema drift checking passed and existing record counts were unchanged.
+Read-only application checks against Testing returned HTTP 200 for `/member` and
+`/member/profile/preview`. The edit route was excluded from the read-only check
+because it takes a PostgreSQL row lock. The owner-approved temporary TCP endpoint
+was removed afterward; the proxy list is empty. No SSH key was registered, and
+the unused local temporary key was removed. Production was not changed. Railway's
+custom web Start Command was not changed by this database repair.
+
+Restore rehearsal and deployed browser/mobile acceptance remain outstanding.
+The Society must approve its
 retention schedule (including backups), privacy contact and moderation staffing
 before public launch. No automatic retention duration is invented here. After
 restoring an older backup, reapply recorded opt-outs/deletion requests before
