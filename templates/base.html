@@ -32,7 +32,17 @@
         <a href="{{ url_for('notices') }}">Notices</a>
         <a href="{{ url_for('contact') }}">Contact</a>
         <a href="{{ url_for('donate') }}">Donate</a>
-        {% if current_user and current_user.status == 'active' %}
+        {% if current_user and session.get('renewal_only') and current_user.status in ['inactive', 'expired'] %}
+        <a href="{{ url_for('membership_renewal') }}">Renew membership</a>
+        <form class="nav-form" method="post" action="{{ url_for('logout') }}">
+          <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ session.get('csrf_token', '') }}"
+          />
+          <button class="nav-button" type="submit">Sign out</button>
+        </form>
+        {% elif current_user and current_user.status == 'active' %}
         <a href="{{ url_for('member_home') }}">Member area</a>
         {% if current_user.is_admin %}<a href="{{ url_for('admin_requests') }}"
           >Admin</a
@@ -82,6 +92,7 @@
           %}
           >Resources</a
         >
+        {% if can_access_adult_hub %}
         <a
           href="{{ url_for('member_search') }}"
           {%
@@ -95,7 +106,7 @@
           %}
           >Search Members</a
         >
-        {% if current_user.is_admin %}
+        {% endif %} {% if current_user.is_admin %}
         <a
           href="{{ url_for('admin_members') }}"
           {%

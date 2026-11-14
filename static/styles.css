@@ -421,6 +421,11 @@ h3 {
   background: #e3f2e8;
   color: #245c3b;
 }
+.status-pill--inactive,
+.status-pill--expired {
+  background: #f1e7e5;
+  color: #713e37;
+}
 .status-pill--pending {
   background: #fff3d8;
   color: #735417;

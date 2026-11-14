@@ -714,8 +714,8 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
         term = MembershipTerm.query.filter_by(user_id=member_id).one()
         assert term.membership_type == "adult"
         assert term.annual_dues_cents == 1000
-        assert term.payment_status == "unpaid"
-        assert term.payment_date is None
+        assert term.payment_status == "paid"
+        assert term.payment_date == date.today()
         assert term.voting_eligible is True
         assert term.expiry_date.year == term.start_date.year + 1
 
@@ -723,12 +723,7 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
         f"/admin/members/{member_id}/membership/payment",
         data={"csrf_token": "test-csrf-token", "payment_reference": "cash-receipt-42"},
     )
-    assert response.status_code == 302
-    with app.app_context():
-        term = MembershipTerm.query.filter_by(user_id=member_id).one()
-        assert term.payment_status == "paid"
-        assert term.payment_date is not None
-        assert term.payment_reference == "cash-receipt-42"
+    assert response.status_code == 404
 
     member_admin_page = client.get("/admin/members")
     assert member_admin_page.status_code == 200
@@ -781,6 +776,58 @@ def test_non_admin_cannot_review_requests(client, app):
     member_home = client.get("/member")
     assert b"Manage Members" not in member_home.data
     assert b"Access Requests" not in member_home.data
+
+
+def test_member_directory_is_adult_only_and_reveals_no_profiles_before_opt_in(
+    client, app, make_user
+):
+    with app.app_context():
+        adult = make_user()
+        youth = make_user(
+            birth_date=date(2010, 1, 1),
+            membership_type="youth",
+        )
+        expired = make_user()
+        expired.membership_terms.append(
+            MembershipTerm(
+                term_number=1,
+                membership_type="adult",
+                status="active",
+                approval_date=date.today() - timedelta(days=400),
+                start_date=date.today() - timedelta(days=400),
+                expiry_date=date.today() - timedelta(days=1),
+                annual_dues_cents=1000,
+                payment_status="paid",
+            )
+        )
+        db.session.add_all([adult, youth, expired])
+        db.session.commit()
+        adult_id = adult.id
+        adult_name = adult.full_name
+        youth_name = youth.full_name
+        expired_name = expired.full_name
+
+    assert client.get("/members/search?q=Synthetic").status_code == 302
+
+    with client.session_transaction() as session:
+        session["user_id"] = adult_id
+        session["csrf_token"] = "test-csrf-token"
+    adult_response = client.get("/members/search?q=Synthetic")
+    assert adult_response.status_code == 200
+    assert b"Members will only appear after they explicitly opt in" in adult_response.data
+    assert adult_name.encode() not in adult_response.data
+    assert youth_name.encode() not in adult_response.data
+    assert expired_name.encode() not in adult_response.data
+    assert b"Search Members" in client.get("/member").data
+
+    with app.app_context():
+        youth_id = User.query.filter_by(full_name=youth_name).one().id
+    with client.session_transaction() as session:
+        session["user_id"] = youth_id
+        session["csrf_token"] = "test-csrf-token"
+    youth_response = client.get("/members/search?q=Synthetic")
+    assert youth_response.status_code == 403
+    assert b"Search Members" not in client.get("/member").data
 
 
 def test_voting_eligibility_requires_age_19_and_approved_account():
@@ -1237,7 +1284,9 @@ def test_youth_application_records_guardian_consent_and_waived_dues(
         assert term.voting_eligible is False
 
 
-def test_expired_member_is_blocked_and_admin_can_renew(client, app):
+def test_overdue_member_is_inactive_until_payment_and_admin_approves_renewal(
+    client, app
+):
     with app.app_context():
         admin = User(
             full_name="Society administrator",
@@ -1272,7 +1321,20 @@ def test_expired_member_is_blocked_and_admin_can_renew(client, app):
         member_id = member.id
 
     set_csrf(client)
-    expired_login = client.post(
+    blocked_client = app.test_client()
+    with blocked_client.session_transaction() as session:
+        session["user_id"] = member_id
+        session["csrf_token"] = "test-csrf-token"
+    blocked_response = blocked_client.get("/member")
+    assert blocked_response.status_code == 302
+    with app.app_context():
+        expired_member = db.session.get(User, member_id)
+        assert expired_member.status == "inactive"
+        assert MembershipTerm.query.filter_by(
+            user_id=member_id, term_number=1
+        ).one().status == "expired"
+
+    renewal_login = client.post(
         "/login",
         data={
             "csrf_token": "test-csrf-token",
@@ -1280,23 +1342,57 @@ def test_expired_member_is_blocked_and_admin_can_renew(client, app):
             "password": "Expired-Member-Password-1",
         },
     )
-    assert expired_login.status_code == 200
-    with app.app_context():
-        assert db.session.get(User, member_id).status == "expired"
+    assert renewal_login.status_code == 302
+    assert renewal_login.location.endswith("/membership/renew")
+    renewal_page = client.get("/membership/renew")
+    assert renewal_page.status_code == 200
+    assert b"Adult annual dues are $10" in renewal_page.data
 
-    login_as(client, member_id)
-    response = client.get("/member")
-    assert response.status_code == 302
+    set_csrf(client)
+    request_response = client.post(
+        "/membership/renew",
+        data={"csrf_token": "test-csrf-token"},
+    )
+    assert request_response.status_code == 302
     with app.app_context():
-        assert db.session.get(User, member_id).status == "expired"
-        assert MembershipTerm.query.filter_by(user_id=member_id, term_number=1).one().status == "expired"
+        inactive_member = db.session.get(User, member_id)
+        assert inactive_member.status == "inactive"
+        pending_term = MembershipTerm.query.filter_by(
+            user_id=member_id, term_number=2
+        ).one()
+        assert pending_term.status == "pending"
+        assert pending_term.payment_status == "unpaid"
 
+    with client.session_transaction() as session:
+        session.clear()
+        session["csrf_token"] = "test-csrf-token"
     login_as(client, admin_id)
     response = client.post(
         f"/admin/members/{member_id}/membership/renew",
         data={"csrf_token": "test-csrf-token"},
     )
-    assert response.status_code == 302
+    assert response.status_code == 404
+
+    login_as(client, admin_id)
+    payment_response = client.post(
+        f"/admin/members/{member_id}/membership/payment",
+        data={"csrf_token": "test-csrf-token", "payment_reference": "renewal-42"},
+    )
+    assert payment_response.status_code == 302
+    with app.app_context():
+        inactive_member = db.session.get(User, member_id)
+        pending_term = MembershipTerm.query.filter_by(
+            user_id=member_id, term_number=2
+        ).one()
+        assert inactive_member.status == "inactive"
+        assert pending_term.payment_status == "paid"
+        assert pending_term.payment_reference == "renewal-42"
+
+    approve_response = client.post(
+        f"/admin/members/{member_id}/membership/renew",
+        data={"csrf_token": "test-csrf-token"},
+    )
+    assert approve_response.status_code == 302
     with app.app_context():
         renewed_member = db.session.get(User, member_id)
         assert renewed_member.status == "active"
@@ -1304,7 +1400,24 @@ def test_expired_member_is_blocked_and_admin_can_renew(client, app):
         assert len(terms) == 2
         assert terms[0].start_date == date(2020, 1, 1)
         assert terms[1].term_number == 2
-        assert terms[1].payment_status == "unpaid"
+        assert terms[1].status == "active"
+        assert terms[1].payment_status == "paid"
+        assert terms[1].start_date == date.today()
+
+    with client.session_transaction() as session:
+        session.clear()
+        session["csrf_token"] = "test-csrf-token"
+    member_login = client.post(
+        "/login",
+        data={
+            "csrf_token": "test-csrf-token",
+            "username": "expired-member",
+            "password": "Expired-Member-Password-1",
+        },
+    )
+    assert member_login.status_code == 302
+    assert member_login.location.endswith("/member")
+    assert client.get("/member").status_code == 200
 
 
 def test_migration_stamp_adopts_existing_complete_schema(tmp_path):

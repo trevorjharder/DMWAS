@@ -11,7 +11,6 @@ import re
 import secrets
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
-from pathlib import Path
 from typing import Callable, TypeVar, cast
 from urllib.error import HTTPError
 from urllib import request as urllib_request
@@ -32,6 +31,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from permissions import Capability, has_capability, is_active_member
 
 
 db = SQLAlchemy()
@@ -192,18 +193,35 @@ def _one_year_after(day: date) -> date:
 
 
 def _expire_membership_if_due(user: User, today: date | None = None) -> bool:
-    if user.status != "active":
+    if user.status not in {"active", "inactive", "expired"}:
         return False
     latest_term = (
         MembershipTerm.query.filter_by(user_id=user.id)
         .order_by(MembershipTerm.term_number.desc())
         .first()
     )
-    if not latest_term or (today or date.today()) <= latest_term.expiry_date:
+    if not latest_term:
+        if user.status == "expired":
+            user.status = "inactive"
+            return True
         return False
-    latest_term.status = "expired"
-    user.status = "expired"
-    return True
+
+    current_date = today or date.today()
+    changed = False
+    expired_by_date = current_date > latest_term.expiry_date
+    dues_unpaid = latest_term.payment_status not in {"paid", "waived"}
+    if expired_by_date and latest_term.status == "active":
+        latest_term.status = "expired"
+        changed = True
+    if (
+        expired_by_date
+        or dues_unpaid
+        or latest_term.status != "active"
+        or user.status == "expired"
+    ) and user.status != "inactive":
+        user.status = "inactive"
+        changed = True
+    return changed
 
 
 def _is_19_or_older(birth_date: date, today: date | None = None) -> bool:
@@ -218,7 +236,7 @@ def _is_voting_eligible(user: User, today: date | None = None) -> bool | None:
     """Return current eligibility; None means the applicant's age is unknown."""
     if not user.membership_details:
         return None
-    return user.status == "active" and _is_19_or_older(
+    return is_active_member(user, today) and _is_19_or_older(
         user.membership_details.date_of_birth, today
     )
 
@@ -324,6 +342,21 @@ def _send_request_notification(user: User) -> None:
     )
 
 
+def _send_renewal_request_notification(user: User) -> None:
+    """Notify administrators that an inactive member requested renewal."""
+    _send_resend_email(
+        os.environ.get("ADMIN_NOTIFICATION_EMAIL", "members@accessni.ca"),
+        "DMWAS membership renewal awaiting review",
+        (
+            "A member has submitted a renewal request. Review the member's "
+            "payment and renewal in the administrator member list.\n\n"
+            f"Member: {user.member_number}\n"
+            f"Name: {user.full_name}\n"
+            f"Email: {user.email}"
+        ),
+    )
+
+
 def _send_membership_application_confirmation(user: User) -> None:
     """Thank an applicant and explain their pending account and dues status."""
     details = user.membership_details
@@ -419,7 +452,13 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     def inject_template_values() -> dict[str, object]:
         if not session.get("csrf_token"):
             session["csrf_token"] = secrets.token_urlsafe(32)
-        return {"current_user": g.get("current_user")}
+        current_user = g.get("current_user")
+        return {
+            "current_user": current_user,
+            "can_access_adult_hub": has_capability(
+                current_user, Capability.ADULT_DIRECTORY
+            ),
+        }
 
     @app.after_request
     def set_security_headers(response):
@@ -432,10 +471,35 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         @wraps(view)
         def wrapped(*args: object, **kwargs: object):
             user = g.get("current_user")
-            if not user or user.status != "active":
+            if not has_capability(user, Capability.ACCOUNT_ACCESS):
                 session.clear()
                 flash("Please sign in with an approved member account.", "info")
                 return redirect(url_for("login", next=request.path))
+            return view(*args, **kwargs)
+
+        return cast(F, wrapped)
+
+    def adult_member_required(view: F) -> F:
+        @wraps(view)
+        @login_required
+        def wrapped(*args: object, **kwargs: object):
+            if not has_capability(g.get("current_user"), Capability.ADULT_DIRECTORY):
+                abort(403)
+            return view(*args, **kwargs)
+
+        return cast(F, wrapped)
+
+    def renewal_access_required(view: F) -> F:
+        @wraps(view)
+        def wrapped(*args: object, **kwargs: object):
+            user = g.get("current_user")
+            if has_capability(user, Capability.ACCOUNT_ACCESS):
+                session.pop("renewal_only", None)
+                return redirect(url_for("member_home"))
+            if not session.get("renewal_only") or not has_capability(
+                user, Capability.RENEWAL_REQUEST
+            ):
+                abort(403)
             return view(*args, **kwargs)
 
         return cast(F, wrapped)
@@ -444,7 +508,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         @wraps(view)
         @login_required
         def wrapped(*args: object, **kwargs: object):
-            if not g.current_user.is_admin:
+            if not has_capability(g.current_user, Capability.ADMIN_REVIEW):
                 abort(403)
             return view(*args, **kwargs)
 
@@ -556,14 +620,26 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             user = User.query.filter_by(username=username).first()
             if user and _expire_membership_if_due(user):
                 db.session.commit()
-            if user and user.status == "active" and user.check_password(password):
-                session.clear()
-                session["user_id"] = user.id
-                flash("You are signed in.", "success")
-                destination = request.args.get("next", "")
-                if destination.startswith("/") and not destination.startswith("//"):
-                    return redirect(destination)
-                return redirect(url_for("member_home"))
+            if user and user.check_password(password):
+                if has_capability(user, Capability.ACCOUNT_ACCESS):
+                    session.clear()
+                    session["user_id"] = user.id
+                    flash("You are signed in.", "success")
+                    destination = request.args.get("next", "")
+                    if destination.startswith("/") and not destination.startswith("//"):
+                        return redirect(destination)
+                    return redirect(url_for("member_home"))
+                if has_capability(user, Capability.RENEWAL_REQUEST):
+                    session.clear()
+                    session["user_id"] = user.id
+                    session["renewal_only"] = True
+                    flash(
+                        "Your membership is inactive. You can request renewal, "
+                        "but member access remains disabled until payment and "
+                        "administrator approval are complete.",
+                        "info",
+                    )
+                    return redirect(url_for("membership_renewal"))
             flash("The username or password was not accepted, or the account is awaiting approval.", "error")
         return render_template("login.html", title="Member sign in")
 
@@ -879,9 +955,78 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
 
         return render_template("membership_request.html", title="Membership application")
 
+    @app.route("/membership/renew", methods=["GET", "POST"])
+    @renewal_access_required
+    def membership_renewal():
+        user = g.current_user
+        latest_term = (
+            MembershipTerm.query.filter_by(user_id=user.id)
+            .order_by(MembershipTerm.term_number.desc())
+            .first()
+        )
+        if not latest_term:
+            abort(404)
+
+        if request.method == "POST":
+            if latest_term.status == "pending":
+                flash("Your renewal request is already awaiting administrator review.", "info")
+                return redirect(url_for("membership_renewal"))
+
+            today = date.today()
+            membership_type = latest_term.membership_type
+            annual_dues_cents = 1000 if membership_type == "adult" else 0
+            user.membership_terms.append(
+                MembershipTerm(
+                    term_number=latest_term.term_number + 1,
+                    membership_type=membership_type,
+                    status="pending",
+                    # These dates are provisional until an administrator approves.
+                    approval_date=today,
+                    start_date=today,
+                    expiry_date=today,
+                    annual_dues_cents=annual_dues_cents,
+                    payment_status="unpaid" if annual_dues_cents else "waived",
+                    voting_eligible=(
+                        _is_19_or_older(user.membership_details.date_of_birth, today)
+                        if user.membership_details
+                        else None
+                    ),
+                )
+            )
+            db.session.commit()
+            try:
+                _send_renewal_request_notification(user)
+            except HTTPError as error:
+                app.logger.error(
+                    "Resend rejected membership renewal notification: HTTP %s, request id %s",
+                    error.code,
+                    error.headers.get("x-resend-id", "unknown"),
+                )
+            except (OSError, ValueError):
+                app.logger.exception("Could not send membership renewal notification")
+            flash(
+                "Your renewal request was submitted. Member access will remain "
+                "inactive until any dues are recorded and an administrator approves it.",
+                "success",
+            )
+            return redirect(url_for("membership_renewal"))
+
+        return render_template(
+            "membership_renewal.html",
+            title="Renew membership",
+            latest_term=latest_term,
+            renewal_pending=latest_term.status == "pending",
+        )
+
     @app.post("/logout")
-    @login_required
     def logout():
+        user = g.get("current_user")
+        member_access = has_capability(user, Capability.ACCOUNT_ACCESS)
+        renewal_access = session.get("renewal_only") and has_capability(
+            user, Capability.RENEWAL_REQUEST
+        )
+        if not member_access and not renewal_access:
+            abort(403)
         session.clear()
         flash("You are signed out.", "success")
         return redirect(url_for("about"))
@@ -897,20 +1042,12 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         return render_template("member_resources.html", title="Member resources")
 
     @app.get("/members/search")
-    @login_required
+    @adult_member_required
     def member_search():
-        query = request.args.get("q", "").strip()
-        members = []
-        if query:
-            members = (
-                User.query.filter_by(status="active", is_admin=False)
-                .filter(User.full_name.ilike(f"%{query}%"))
-                .order_by(User.full_name)
-                .limit(50)
-                .all()
-            )
         return render_template(
-            "member_search.html", title="Search members", query=query, members=members
+            "member_search.html",
+            title="Member directory",
+            directory_unavailable=True,
         )
 
     @app.get("/admin/members")
@@ -1030,7 +1167,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         details = user.membership_details
         membership_type = details.membership_type if details else "legacy"
         annual_dues_cents = 1000 if membership_type == "adult" else 0
-        payment_status = "unpaid" if annual_dues_cents else "waived"
+        payment_status = "paid" if annual_dues_cents else "waived"
         previous_terms = MembershipTerm.query.filter_by(user_id=user.id).all()
         term_number = max((term.term_number for term in previous_terms), default=0) + 1
         user.membership_terms.append(
@@ -1043,6 +1180,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 expiry_date=_one_year_after(today),
                 annual_dues_cents=annual_dues_cents,
                 payment_status=payment_status,
+                payment_date=today if annual_dues_cents else None,
                 voting_eligible=(
                     _is_19_or_older(details.date_of_birth, today)
                     if details
@@ -1095,18 +1233,27 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             db.session.commit()
         if (
             not term
-            or term.status != "active"
-            or user.status != "active"
             or term.payment_status != "unpaid"
         ):
+            abort(404)
+        today = date.today()
+        pending_renewal = term.status == "pending" and user.status == "inactive"
+        current_term_payment = (
+            term.status == "active"
+            and user.status in {"active", "inactive"}
+            and term.expiry_date >= today
+        )
+        if not pending_renewal and not current_term_payment:
             abort(404)
         payment_reference = request.form.get("payment_reference", "").strip()
         if len(payment_reference) > 255:
             flash("Payment reference must be 255 characters or fewer.", "error")
             return redirect(url_for("admin_members"))
         term.payment_status = "paid"
-        term.payment_date = date.today()
+        term.payment_date = today
         term.payment_reference = payment_reference or None
+        if current_term_payment:
+            user.status = "active"
         db.session.commit()
         flash(f"Payment recorded for {user.member_number}.", "success")
         return redirect(url_for("admin_members"))
@@ -1115,35 +1262,60 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @admin_required
     def renew_membership(user_id: int):
         user = db.session.get(User, user_id)
-        if not user or user.is_admin or user.status != "expired":
+        if not user or user.is_admin or user.status not in {"inactive", "expired"}:
             abort(404)
         today = date.today()
-        prior_terms = MembershipTerm.query.filter_by(user_id=user.id).all()
-        latest_term = max(prior_terms, key=lambda term: term.term_number, default=None)
-        if not latest_term:
+        pending_term = (
+            MembershipTerm.query.filter_by(user_id=user.id)
+            .order_by(MembershipTerm.term_number.desc())
+            .first()
+        )
+        if (
+            not pending_term
+            or pending_term.status != "pending"
+            or pending_term.payment_status not in {"paid", "waived"}
+        ):
             abort(404)
-        membership_type = latest_term.membership_type
-        annual_dues_cents = 1000 if membership_type == "adult" else 0
-        user.membership_terms.append(
-            MembershipTerm(
-                term_number=latest_term.term_number + 1,
-                membership_type=membership_type,
-                status="active",
-                approval_date=today,
-                start_date=today,
-                expiry_date=_one_year_after(today),
-                annual_dues_cents=annual_dues_cents,
-                payment_status="unpaid" if annual_dues_cents else "waived",
-                voting_eligible=(
-                    _is_19_or_older(user.membership_details.date_of_birth, today)
-                    if user.membership_details
-                    else None
-                ),
-            )
+        pending_term.status = "active"
+        pending_term.approval_date = today
+        pending_term.start_date = today
+        pending_term.expiry_date = _one_year_after(today)
+        pending_term.voting_eligible=(
+            _is_19_or_older(user.membership_details.date_of_birth, today)
+            if user.membership_details
+            else None
         )
         user.status = "active"
         db.session.commit()
+        try:
+            _send_membership_approval_notification(user)
+        except HTTPError as error:
+            app.logger.error(
+                "Resend rejected membership renewal approval: HTTP %s, request id %s",
+                error.code,
+                error.headers.get("x-resend-id", "unknown"),
+            )
+        except (OSError, ValueError):
+            app.logger.exception("Could not send membership renewal approval")
         flash(f"Membership renewed for {user.member_number}.", "success")
+        return redirect(url_for("admin_members"))
+
+    @app.post("/admin/members/<int:user_id>/membership/renew/decline")
+    @admin_required
+    def decline_membership_renewal(user_id: int):
+        user = db.session.get(User, user_id)
+        if not user or user.is_admin or user.status not in {"inactive", "expired"}:
+            abort(404)
+        latest_term = (
+            MembershipTerm.query.filter_by(user_id=user.id)
+            .order_by(MembershipTerm.term_number.desc())
+            .first()
+        )
+        if not latest_term or latest_term.status != "pending":
+            abort(404)
+        latest_term.status = "declined"
+        db.session.commit()
+        flash("The membership renewal request was declined.", "success")
         return redirect(url_for("admin_members"))
 
     @app.cli.command("create-admin")
