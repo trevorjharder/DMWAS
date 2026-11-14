@@ -52,6 +52,55 @@ def moderate(client, ids, action="approve", version=1):
     })
 
 
+@pytest.mark.parametrize("account", ["admin", "owner"])
+def test_profile_is_auto_approved_on_create_and_edit(client, app, profiles, account):
+    # Use a new profile for both roles.
+    with app.app_context():
+        if account == "owner":
+            db.session.delete(db.session.get(CommunityProfile, profiles["profile"]))
+            db.session.commit()
+    profiles = dict(profiles, admin=profiles[account])
+    login_as(client, profiles["admin"])
+    for biography in ("First submission", "Updated submission"):
+        response = save_profile(client, directory_opt_in="yes", biography=biography)
+        assert response.status_code == 302
+        with app.app_context():
+            profile = CommunityProfile.query.filter_by(user_id=profiles["admin"]).one()
+            assert profile.status == "approved"
+            assert profile.moderated_by_id == profiles["admin"]
+            assert profile.moderated_at is not None
+            assert profile.reviews[-1].decision == "approve"
+            assert profile.reviews[-1].moderator_user_id == profiles["admin"]
+        login_as(client, profiles["viewer"])
+        assert client.get(f"/api/community/profiles/{profiles['admin']}").json == {"display_name": "Trail Alias"}
+        login_as(client, profiles["admin"])
+    with app.app_context():
+        assert len(CommunityProfile.query.filter_by(user_id=profiles["admin"]).one().reviews) == 2
+    # Administrator status never grants directory consent on the member's behalf.
+    assert save_profile(client).status_code == 302
+    with app.app_context():
+        profile = CommunityProfile.query.filter_by(user_id=profiles["admin"]).one()
+        assert not profile.directory_opt_in
+        assert profile.status == "draft"
+    login_as(client, profiles["viewer"])
+    assert client.get(f"/api/community/profiles/{profiles['admin']}").status_code == 404
+
+
+@pytest.mark.parametrize("ineligible", ["youth", "expired"])
+def test_ineligible_admin_cannot_auto_approve_directory_profile(client, app, profiles, ineligible):
+    with app.app_context():
+        admin = db.session.get(User, profiles["admin"])
+        if ineligible == "youth":
+            admin.membership_details.date_of_birth = date.today()
+        else:
+            admin.status = "inactive"
+        db.session.commit()
+    login_as(client, profiles["admin"])
+    assert save_profile(client, directory_opt_in="yes").status_code == 400
+    with app.app_context():
+        assert CommunityProfile.query.filter_by(user_id=profiles["admin"]).first() is None
+
+
 def test_html_api_and_search_never_expose_hidden_fields(client, profiles):
     login_as(client, profiles["viewer"])
     api = client.get(f"/api/community/profiles/{profiles['owner']}")
@@ -125,16 +174,15 @@ def test_ineligible_viewers_cannot_read_profiles_or_api(client, app, profiles, v
     assert client.get(f"/members/{profiles['owner']}/profile").status_code in {302, 403}
 
 
-def test_opt_out_and_edits_hide_approved_profile_immediately(client, app, profiles):
+def test_edits_are_auto_approved_and_opt_out_hides_immediately(client, app, profiles):
     login_as(client, profiles["owner"])
     assert save_profile(client, directory_opt_in="yes", biography="Changed content").status_code == 302
     with app.app_context():
         profile = db.session.get(CommunityProfile, profiles["profile"])
-        assert profile.status == "pending"
-        assert profile.moderated_at is None
+        assert profile.status == "approved"
+        assert profile.moderated_at is not None
     login_as(client, profiles["viewer"])
-    assert client.get(f"/api/community/profiles/{profiles['owner']}").status_code == 404
-    assert moderate(client, profiles, version=2).status_code == 302
+    assert client.get(f"/api/community/profiles/{profiles['owner']}").status_code == 200
     login_as(client, profiles["owner"])
     assert save_profile(client).status_code == 302
     login_as(client, profiles["viewer"])
@@ -158,14 +206,14 @@ def test_moderation_hides_private_fields_and_can_unpublish_with_audit(client, ap
     assert client.get(f"/api/community/profiles/{profiles['owner']}").status_code == 404
 
 
-def test_stale_review_cannot_approve_new_content(client, app, profiles):
+def test_stale_review_cannot_unpublish_new_content(client, app, profiles):
     login_as(client, profiles["owner"])
     save_profile(client, directory_opt_in="yes")
-    assert moderate(client, profiles, version=1).status_code == 409
+    assert moderate(client, profiles, action="reject", version=1).status_code == 409
     with app.app_context():
-        assert CommunityProfileReview.query.count() == 0
-        assert db.session.get(CommunityProfile, profiles["profile"]).status == "pending"
-    assert moderate(client, profiles, version=2).status_code == 302
+        assert CommunityProfileReview.query.count() == 1
+        assert db.session.get(CommunityProfile, profiles["profile"]).status == "approved"
+    assert moderate(client, profiles, action="reject", version=2).status_code == 302
 
 
 def test_preview_and_mutations_are_owner_scoped_and_csrf_protected(client, app, profiles):
@@ -213,16 +261,15 @@ def test_photo_upload_is_normalized_private_and_removed(client, app, profiles):
     assert client.get(f"/members/{profiles['owner']}/profile/photo").status_code == 404
 
 
-def test_shared_photo_requires_review_and_is_hidden_after_opt_out(client, profiles):
+def test_shared_photo_is_auto_approved_and_hidden_after_opt_out(client, profiles):
     login_as(client, profiles["owner"])
     save_profile(client, directory_opt_in="yes", show_photo="yes",
                  photo=(BytesIO(photo_bytes()), "photo.jpg"))
     login_as(client, profiles["viewer"])
     photo_url = f"/members/{profiles['owner']}/profile/photo"
-    assert client.get(photo_url).status_code == 404
+    assert client.get(photo_url).status_code == 200
     login_as(client, profiles["admin"])
     assert client.get(photo_url).status_code == 200  # Only the sharing submission.
-    assert moderate(client, profiles, version=2).status_code == 302
     login_as(client, profiles["viewer"])
     assert client.get(photo_url).status_code == 200
     login_as(client, profiles["owner"])

@@ -24,8 +24,11 @@ highlights remain disabled for Phase 05.
 - Owner edit/preview and explicit self-service deletion. Approved, inactive and
   expired accounts retain their own privacy controls without regaining directory
   access. Youth can keep a private profile but cannot opt into adult discovery.
-- Opted-in profiles require administrator approval. Any edit returns an opted-in
-  profile to pending review. Opt-out hides it immediately. Administrators can
+- Eligible adult members' opted-in profiles are automatically approved on creation
+  and every edit, with each decision recorded in the review audit history. Opt-in
+  remains explicit, and hidden fields, youth and expiry rules remain enforced.
+  Existing pending profiles become approved when their owner next saves them.
+  Opt-out hides it immediately. Administrators can
   reject or unpublish profiles and leave private feedback. Decisions record the
   administrator, time and note. A version check and ORM optimistic concurrency
   prevent approval of content changed since the review form was loaded.

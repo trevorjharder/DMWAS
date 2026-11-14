@@ -1268,15 +1268,33 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 profile.photo = None
             elif photo_data is not None:
                 profile.photo = photo_data
-            # Any opted-in edit requires a fresh review; opting out hides it immediately.
+            # Every eligible adult member's sharing submission is approved on save.
+            auto_approve = (
+                directory_opt_in
+                and has_capability(user, Capability.ADULT_DIRECTORY)
+            )
             profile.status = "pending" if directory_opt_in else "draft"
             profile.moderation_note = None
             profile.moderated_by_id = None
             profile.moderated_at = None
+            if auto_approve:
+                profile.status = "approved"
+                profile.moderation_note = "Automatically approved on member save."
+                profile.moderated_by_id = user.id
+                profile.moderated_at = datetime.now(timezone.utc)
+                db.session.flush()
+                db.session.add(CommunityProfileReview(
+                    profile_id=profile.id,
+                    moderator_user_id=user.id,
+                    decision="approve",
+                    note=profile.moderation_note,
+                    reviewed_at=profile.moderated_at,
+                ))
             db.session.commit()
             flash(
-                "Profile saved. It remains private unless you opt in; opted-in "
-                "profiles are hidden until an administrator approves them.",
+                "Profile saved and automatically approved for the adult directory."
+                if auto_approve else
+                "Profile saved privately. Directory opt-in is off.",
                 "success",
             )
             return redirect(url_for("member_profile"))

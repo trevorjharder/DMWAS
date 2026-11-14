@@ -94,9 +94,9 @@
 
       <h2>Privacy controls</h2>
       <p class="form-hint">
-        Directory opt-in is off by default. An opted-in profile stays hidden
-        until an administrator approves it. Each optional field below is hidden
-        unless you select it.
+        Directory opt-in is off by default. Eligible adult members' opted-in
+        profiles are automatically approved when saved. Each optional field
+        below is hidden unless you select it.
       </p>
       <label class="check-label">
         <input
@@ -105,7 +105,7 @@
           value="yes"
           {% if directory_checked %}checked{% endif %}
         />
-        I want my display name to appear in the adult member directory after review.
+        I want my display name to appear in the adult member directory.
       </label>
       <label class="check-label">
         <input type="checkbox" name="show_biography" value="yes" {% if biography_checked %}checked{% endif %} />
@@ -128,7 +128,7 @@
         <input type="checkbox" name="show_photo" value="yes" {% if photo_checked %}checked{% endif %} />
         Show my photo
       </label>
-      <p class="form-hint">Reviewers see only the fields you select for sharing. Saving an opted-in edit hides your profile until it is reviewed again.</p>
+      <p class="form-hint">Only the fields you select are shared. Your opted-in profile and edits are automatically approved. Administrators can still unpublish profiles.</p>
       <div class="profile-form-actions">
         <button class="button button--primary" type="submit">Save profile</button>
         <a class="button button--secondary" href="{{ url_for('member_profile_preview') }}">Preview saved profile</a>
