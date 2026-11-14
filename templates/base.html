@@ -32,7 +32,8 @@
         <a href="{{ url_for('notices') }}">Notices</a>
         <a href="{{ url_for('contact') }}">Contact</a>
         <a href="{{ url_for('donate') }}">Donate</a>
-        {% if current_user and session.get('renewal_only') and current_user.status in ['inactive', 'expired'] %}
+        {% if current_user and session.get('renewal_only') and
+        current_user.status in ['inactive', 'expired'] %}
         <a href="{{ url_for('membership_renewal') }}">Renew membership</a>
         <form class="nav-form" method="post" action="{{ url_for('logout') }}">
           <input
