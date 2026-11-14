@@ -744,6 +744,9 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
     assert response.location.endswith("/member")
     assert client.get("/member").status_code == 200
     member_home = client.get("/member")
+    assert b"Your membership" in member_home.data
+    assert b"Membership status" in member_home.data
+    assert b"Current term" in member_home.data
     assert b"Resources" in member_home.data
     assert b"Search Members" in member_home.data
     assert b"Manage Members" not in member_home.data
@@ -961,6 +964,9 @@ def test_admin_member_page_is_linked_and_lists_accounts(client, app):
     home = client.get("/member")
     assert b"Manage Members" in home.data
     assert b"Access Requests" in home.data
+    assert b"Administrator tools" in home.data
+    assert b"Open member management" in home.data
+    assert b"Review requests" in home.data
 
     response = client.get("/admin/members")
     assert response.status_code == 200

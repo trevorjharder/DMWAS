@@ -1034,7 +1034,17 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @app.get("/member")
     @login_required
     def member_home():
-        return render_template("member_home.html", title="Member area")
+        member = g.current_user
+        membership_term = (
+            MembershipTerm.query.filter_by(user_id=member.id)
+            .order_by(MembershipTerm.term_number.desc())
+            .first()
+        )
+        return render_template(
+            "member_home.html",
+            title="Member area",
+            membership_term=membership_term,
+        )
 
     @app.get("/member/resources")
     @login_required

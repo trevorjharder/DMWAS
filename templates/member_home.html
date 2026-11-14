@@ -1,14 +1,148 @@
 {% extends "base.html" %} {% block content %}
-<section class="page-heading">
-  <p class="eyebrow">Members</p>
-  <h1>Member area</h1>
-  <p>
-    Welcome, {{ current_user.full_name }}. Member resources will be added in a
-    later step.
-  </p>
-</section>
-<section class="empty-state">
-  <h2>More coming later</h2>
-  <p>This is the starting point for the private member area.</p>
-</section>
+<div class="hub-dashboard">
+  <header class="hub-welcome">
+    <div>
+      <p class="eyebrow">Member hub</p>
+      <h1>Welcome, {{ current_user.full_name }}</h1>
+      <p>
+        Your home for Society resources, membership information, and upcoming
+        Community Hub features.
+      </p>
+    </div>
+    <a class="button button--primary" href="{{ url_for('member_resources') }}">
+      Browse resources
+    </a>
+  </header>
+
+  <section class="hub-section" aria-labelledby="hub-overview-heading">
+    <div class="hub-section__heading">
+      <div>
+        <p class="eyebrow">Overview</p>
+        <h2 id="hub-overview-heading">Your membership</h2>
+      </div>
+    </div>
+
+    <div class="hub-grid">
+      <article class="hub-card hub-card--membership">
+        <div class="hub-card__topline">
+          <h3>Membership status</h3>
+          <span class="status-pill status-pill--active">Active</span>
+        </div>
+        <p class="hub-card__member-number">
+          Member number <strong>{{ current_user.member_number }}</strong>
+        </p>
+        {% if membership_term %}
+        <dl class="hub-membership-details">
+          <div>
+            <dt>Membership type</dt>
+            <dd>{{ membership_term.membership_type|capitalize }}</dd>
+          </div>
+          <div>
+            <dt>Current term</dt>
+            <dd>
+              {{ membership_term.start_date.strftime('%b %d, %Y') }} –
+              {{ membership_term.expiry_date.strftime('%b %d, %Y') }}
+            </dd>
+          </div>
+          <div>
+            <dt>Annual dues</dt>
+            <dd>
+              {% if membership_term.annual_dues_cents %}
+              ${{ '%.2f'|format(membership_term.annual_dues_cents / 100) }} ·
+              {{ membership_term.payment_status|capitalize }}
+              {% else %}
+              Waived
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+        <p class="hub-card__note">
+          Renewal access becomes available when this term ends. For questions,
+          <a href="{{ url_for('contact') }}">contact the Society</a>.
+        </p>
+        {% else %}
+        <p class="hub-card__note">
+          Your account is active, but a membership term is not on file. Please
+          <a href="{{ url_for('contact') }}">contact the Society</a> if you
+          need help with your membership record.
+        </p>
+        {% endif %}
+      </article>
+
+      <article class="hub-card">
+        <div class="hub-card__topline">
+          <h3>Member resources</h3>
+          <span class="hub-status">Available</span>
+        </div>
+        <p>Find Society documents and member information as they are organized.</p>
+        <a class="hub-card__link" href="{{ url_for('member_resources') }}">
+          Visit resources <span aria-hidden="true">→</span>
+        </a>
+      </article>
+
+      <article class="hub-card">
+        <div class="hub-card__topline">
+          <h3>Member directory</h3>
+          <span class="hub-status hub-status--paused">Privacy controls in progress</span>
+        </div>
+        <p>
+          Member discovery is paused until profile privacy and opt-in controls
+          are available.
+        </p>
+        {% if can_access_adult_hub %}
+        <a class="hub-card__link" href="{{ url_for('member_search') }}">
+          View directory status <span aria-hidden="true">→</span>
+        </a>
+        {% else %}
+        <p class="hub-card__note">
+          Adult member discovery will not include youth accounts.
+        </p>
+        {% endif %}
+      </article>
+
+      <article class="hub-card hub-card--upcoming">
+        <div class="hub-card__topline">
+          <h3>Activities</h3>
+          <span class="hub-status">Coming later</span>
+        </div>
+        <p>Activity listings and registration are being prepared.</p>
+      </article>
+
+      <article class="hub-card hub-card--upcoming">
+        <div class="hub-card__topline">
+          <h3>Connections and messages</h3>
+          <span class="hub-status">Coming later</span>
+        </div>
+        <p>Member networking will be introduced with privacy and safety controls.</p>
+      </article>
+    </div>
+  </section>
+
+  {% if current_user.is_admin %}
+  <section class="hub-section" aria-labelledby="hub-admin-heading">
+    <div class="hub-section__heading">
+      <div>
+        <p class="eyebrow">Administration</p>
+        <h2 id="hub-admin-heading">Administrator tools</h2>
+      </div>
+    </div>
+    <div class="hub-grid hub-grid--admin">
+      <article class="hub-card">
+        <h3>Manage members</h3>
+        <p>Review membership status, terms, and dues records.</p>
+        <a class="hub-card__link" href="{{ url_for('admin_members') }}">
+          Open member management <span aria-hidden="true">→</span>
+        </a>
+      </article>
+      <article class="hub-card">
+        <h3>Access requests</h3>
+        <p>Review new membership applications.</p>
+        <a class="hub-card__link" href="{{ url_for('admin_requests') }}">
+          Review requests <span aria-hidden="true">→</span>
+        </a>
+      </article>
+    </div>
+  </section>
+  {% endif %}
+</div>
 {% endblock %}
