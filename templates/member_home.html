@@ -40,19 +40,17 @@
           <div>
             <dt>Current term</dt>
             <dd>
-              {{ membership_term.start_date.strftime('%b %d, %Y') }} –
-              {{ membership_term.expiry_date.strftime('%b %d, %Y') }}
+              {{ membership_term.start_date.strftime('%b %d, %Y') }} – {{
+              membership_term.expiry_date.strftime('%b %d, %Y') }}
             </dd>
           </div>
           <div>
             <dt>Annual dues</dt>
             <dd>
-              {% if membership_term.annual_dues_cents %}
-              ${{ '%.2f'|format(membership_term.annual_dues_cents / 100) }} ·
-              {{ membership_term.payment_status|capitalize }}
-              {% else %}
-              Waived
-              {% endif %}
+              {% if membership_term.annual_dues_cents %} ${{
+              '%.2f'|format(membership_term.annual_dues_cents / 100) }} · {{
+              membership_term.payment_status|capitalize }} {% else %} Waived {%
+              endif %}
             </dd>
           </div>
         </dl>
@@ -63,8 +61,8 @@
         {% else %}
         <p class="hub-card__note">
           Your account is active, but a membership term is not on file. Please
-          <a href="{{ url_for('contact') }}">contact the Society</a> if you
-          need help with your membership record.
+          <a href="{{ url_for('contact') }}">contact the Society</a> if you need
+          help with your membership record.
         </p>
         {% endif %}
       </article>
@@ -74,7 +72,9 @@
           <h3>Member resources</h3>
           <span class="hub-status">Available</span>
         </div>
-        <p>Find Society documents and member information as they are organized.</p>
+        <p>
+          Find Society documents and member information as they are organized.
+        </p>
         <a class="hub-card__link" href="{{ url_for('member_resources') }}">
           Visit resources <span aria-hidden="true">→</span>
         </a>
@@ -83,7 +83,9 @@
       <article class="hub-card">
         <div class="hub-card__topline">
           <h3>Member directory</h3>
-          <span class="hub-status hub-status--paused">Privacy controls in progress</span>
+          <span class="hub-status hub-status--paused"
+            >Privacy controls in progress</span
+          >
         </div>
         <p>
           Member discovery is paused until profile privacy and opt-in controls
@@ -113,7 +115,9 @@
           <h3>Connections and messages</h3>
           <span class="hub-status">Coming later</span>
         </div>
-        <p>Member networking will be introduced with privacy and safety controls.</p>
+        <p>
+          Member networking will be introduced with privacy and safety controls.
+        </p>
       </article>
     </div>
   </section>
