@@ -13,6 +13,7 @@ class Capability(str, Enum):
 
     PUBLIC_ACTIVITY_READ = "public_activity_read"
     ACCOUNT_ACCESS = "account_access"
+    PROFILE_MANAGEMENT = "profile_management"
     RENEWAL_REQUEST = "renewal_request"
     ACTIVITY_REGISTRATION = "activity_registration"
     ACTIVITY_PROPOSAL = "activity_proposal"
@@ -104,6 +105,9 @@ def has_capability(
         return True
     if user is None:
         return False
+
+    if capability is Capability.PROFILE_MANAGEMENT:
+        return user.status in {"active", "inactive", "expired"}
 
     if capability is Capability.RENEWAL_REQUEST:
         return (

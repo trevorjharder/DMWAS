@@ -9,8 +9,10 @@ import logging
 import os
 import re
 import secrets
+import warnings
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
+from io import BytesIO
 from typing import Callable, TypeVar, cast
 from urllib.error import HTTPError
 from urllib import request as urllib_request
@@ -24,12 +26,15 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from permissions import Capability, has_capability, is_active_member
@@ -183,6 +188,139 @@ class MembershipTerm(db.Model):
     )
     user = db.relationship("User", backref=db.backref("membership_terms", lazy="select"))
     __table_args__ = (db.UniqueConstraint("user_id", "term_number"),)
+
+
+COMMUNITY_PROFILE_INTERESTS = MEMBERSHIP_ACTIVITIES
+COMMUNITY_PROFILE_GOALS = (
+    "Join Society activities",
+    "Learn outdoor skills",
+    "Volunteer with local projects",
+    "Help maintain trails and climbing areas",
+    "Connect with other adult members",
+)
+
+
+class CommunityProfile(db.Model):
+    """Member-controlled community profile, separate from verified identity."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
+    display_name = db.Column(db.String(80), nullable=False)
+    biography = db.Column(db.String(500), nullable=False, default="")
+    general_community = db.Column(db.String(120), nullable=False, default="")
+    interests = db.Column(db.JSON, nullable=False, default=list)
+    participation_goals = db.Column(db.JSON, nullable=False, default=list)
+    directory_opt_in = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    show_biography = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    show_community = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    show_interests = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    show_goals = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    photo = db.deferred(db.Column(db.LargeBinary, nullable=True))
+    show_photo = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
+    version = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    __mapper_args__ = {"version_id_col": version}
+    status = db.Column(db.String(20), nullable=False, default="draft", index=True)
+    moderation_note = db.Column(db.String(500), nullable=True)
+    moderated_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    moderated_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(
+        db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    user = db.relationship(
+        "User",
+        foreign_keys=[user_id],
+        backref=db.backref("community_profile", uselist=False),
+    )
+    moderator = db.relationship("User", foreign_keys=[moderated_by_id])
+    reviews = db.relationship(
+        "CommunityProfileReview",
+        backref="profile",
+        cascade="all, delete-orphan",
+        order_by="CommunityProfileReview.reviewed_at",
+    )
+
+
+class CommunityProfileReview(db.Model):
+    """Append-only-by-convention history of administrator profile decisions."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_id = db.Column(
+        db.Integer,
+        db.ForeignKey("community_profile.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    moderator_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    decision = db.Column(db.String(20), nullable=False)
+    note = db.Column(db.String(500), nullable=True)
+    reviewed_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    moderator = db.relationship("User", foreign_keys=[moderator_user_id])
+
+
+def community_profile_fields(profile: CommunityProfile) -> dict[str, object]:
+    """Allowlist fields for peers, APIs, previews and moderation; never identity."""
+    fields: dict[str, object] = {"display_name": profile.display_name}
+    for visible, key, value in (
+        (profile.show_biography, "biography", profile.biography),
+        (profile.show_community, "community", profile.general_community),
+        (profile.show_interests, "interests", profile.interests),
+        (profile.show_goals, "goals", profile.participation_goals),
+    ):
+        if visible:
+            fields[key] = value
+    if profile.show_photo and profile.photo:
+        fields["photo_url"] = url_for("community_profile_photo", user_id=profile.user_id)
+    return fields
+
+
+def delete_community_profile(user_id: int) -> bool:
+    """Transactional erasure hook for self-service and account/retention workflows.
+
+    The caller commits. No schedule is invented for records in backups.
+    """
+    profile = CommunityProfile.query.filter_by(user_id=user_id).with_for_update().first()
+    if profile is None:
+        return False
+    db.session.delete(profile)
+    db.session.flush()
+    return True
+
+
+def normalize_profile_photo(upload) -> bytes:
+    """Decode a bounded JPEG/PNG and retain only resized, metadata-free pixels."""
+    data = upload.stream.read(2 * 1024 * 1024 + 1)
+    if len(data) > 2 * 1024 * 1024:
+        raise ValueError("Choose a photo smaller than 2 MB.")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(data), formats=("JPEG", "PNG")) as image:
+                if image.width * image.height > 16_000_000:
+                    raise ValueError("Choose a photo with no more than 16 million pixels.")
+                if getattr(image, "n_frames", 1) != 1:
+                    raise ValueError("Choose a still JPEG or PNG photo.")
+                image.load()
+                oriented = ImageOps.exif_transpose(image)
+                oriented.thumbnail((512, 512))
+                clean = Image.new("RGB", oriented.size, "white")
+                rgba = oriented.convert("RGBA")
+                clean.paste(rgba, mask=rgba.getchannel("A"))
+                output = BytesIO()
+                clean.save(output, format="JPEG", quality=85)
+                return output.getvalue()
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError,
+            Image.DecompressionBombWarning) as error:
+        raise ValueError("Choose a valid still JPEG or PNG photo.") from error
 
 
 def _one_year_after(day: date) -> date:
@@ -413,6 +551,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=_environment_flag("SESSION_COOKIE_SECURE", False),
+        MAX_CONTENT_LENGTH=4 * 1024 * 1024,
     )
     if test_config:
         app.config.update(test_config)
@@ -465,6 +604,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        if request.path.startswith(("/member", "/api/community", "/admin/community")):
+            response.headers["Cache-Control"] = "private, no-store"
+            response.vary.add("Cookie")
         return response
 
     def login_required(view: F) -> F:
@@ -487,6 +629,16 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 abort(403)
             return view(*args, **kwargs)
 
+        return cast(F, wrapped)
+
+    def profile_owner_required(view: F) -> F:
+        @wraps(view)
+        def wrapped(*args: object, **kwargs: object):
+            if not has_capability(g.get("current_user"), Capability.PROFILE_MANAGEMENT):
+                if request.path.startswith("/api/"):
+                    abort(403)
+                return redirect(url_for("login", next=request.path))
+            return view(*args, **kwargs)
         return cast(F, wrapped)
 
     def renewal_access_required(view: F) -> F:
@@ -1040,11 +1192,181 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             .order_by(MembershipTerm.term_number.desc())
             .first()
         )
+        profile = CommunityProfile.query.filter_by(user_id=member.id).first()
         return render_template(
             "member_home.html",
             title="Member area",
             membership_term=membership_term,
+            community_profile=profile,
         )
+
+    @app.route("/member/profile", methods=["GET", "POST"])
+    @profile_owner_required
+    def member_profile():
+        user = g.current_user
+        profile = CommunityProfile.query.filter_by(user_id=user.id).with_for_update().first()
+        form_interests = request.form.getlist("interests")
+        form_goals = request.form.getlist("participation_goals")
+
+        if request.method == "POST":
+            display_name = request.form.get("display_name", "").strip()
+            biography = request.form.get("biography", "").strip()
+            general_community = request.form.get("general_community", "").strip()
+            requested_interests = list(dict.fromkeys(form_interests))
+            requested_goals = list(dict.fromkeys(form_goals))
+            directory_opt_in = request.form.get("directory_opt_in") == "yes"
+            errors = []
+
+            if not display_name or len(display_name) > 80:
+                errors.append("Choose a display name of 1–80 characters.")
+            if len(biography) > 500:
+                errors.append("Biography must be 500 characters or fewer.")
+            if len(general_community) > 120:
+                errors.append("Community must be 120 characters or fewer.")
+            if any(value not in COMMUNITY_PROFILE_INTERESTS for value in requested_interests):
+                errors.append("Choose interests from the provided list.")
+            if any(value not in COMMUNITY_PROFILE_GOALS for value in requested_goals):
+                errors.append("Choose participation goals from the provided list.")
+            if directory_opt_in and not has_capability(user, Capability.ADULT_DIRECTORY):
+                errors.append("Only active adult members may opt in to the adult directory.")
+            photo_upload = request.files.get("photo")
+            photo_data = None
+            if photo_upload and photo_upload.filename:
+                try:
+                    photo_data = normalize_profile_photo(photo_upload)
+                except ValueError as error:
+                    errors.append(str(error))
+
+            if errors:
+                for error in errors:
+                    flash(error, "error")
+                return render_template(
+                    "member_profile_edit.html",
+                    title="Community profile",
+                    profile=profile,
+                    interests=COMMUNITY_PROFILE_INTERESTS,
+                    goals=COMMUNITY_PROFILE_GOALS,
+                    selected_interests=form_interests,
+                    selected_goals=form_goals,
+                ), 400
+
+            if profile is None:
+                profile = CommunityProfile(user_id=user.id, display_name=display_name)
+                db.session.add(profile)
+            profile.display_name = display_name
+            profile.biography = biography
+            profile.general_community = general_community
+            profile.interests = requested_interests
+            profile.participation_goals = requested_goals
+            profile.directory_opt_in = directory_opt_in
+            profile.show_biography = request.form.get("show_biography") == "yes"
+            profile.show_community = request.form.get("show_community") == "yes"
+            profile.show_interests = request.form.get("show_interests") == "yes"
+            profile.show_goals = request.form.get("show_goals") == "yes"
+            profile.show_photo = request.form.get("show_photo") == "yes"
+            if request.form.get("remove_photo") == "yes":
+                profile.photo = None
+            elif photo_data is not None:
+                profile.photo = photo_data
+            # Any opted-in edit requires a fresh review; opting out hides it immediately.
+            profile.status = "pending" if directory_opt_in else "draft"
+            profile.moderation_note = None
+            profile.moderated_by_id = None
+            profile.moderated_at = None
+            db.session.commit()
+            flash(
+                "Profile saved. It remains private unless you opt in; opted-in "
+                "profiles are hidden until an administrator approves them.",
+                "success",
+            )
+            return redirect(url_for("member_profile"))
+
+        return render_template(
+            "member_profile_edit.html",
+            title="Community profile",
+            profile=profile,
+            interests=COMMUNITY_PROFILE_INTERESTS,
+            goals=COMMUNITY_PROFILE_GOALS,
+            selected_interests=form_interests if request.method == "POST" else None,
+            selected_goals=form_goals if request.method == "POST" else None,
+        )
+
+    @app.get("/member/profile/preview")
+    @profile_owner_required
+    def member_profile_preview():
+        profile = CommunityProfile.query.filter_by(user_id=g.current_user.id).first()
+        return render_template(
+            "member_profile_preview.html",
+            title="Preview community profile",
+            profile=profile,
+            public_fields=community_profile_fields(profile) if profile else {},
+            eligible=has_capability(g.current_user, Capability.ADULT_DIRECTORY),
+        )
+
+    def discoverable_profile(user_id: int):
+        profile = CommunityProfile.query.filter_by(
+            user_id=user_id,
+            directory_opt_in=True,
+            status="approved",
+        ).first()
+        if (
+            not profile
+            or not has_capability(profile.user, Capability.ADULT_DIRECTORY)
+        ):
+            abort(404)
+
+        return profile
+
+    @app.get("/members/<int:user_id>/profile")
+    @adult_member_required
+    def community_profile_view(user_id: int):
+        profile = discoverable_profile(user_id)
+        return render_template(
+            "community_profile_public.html",
+            title=profile.display_name,
+            public_fields=community_profile_fields(profile),
+        )
+
+    @app.get("/api/community/profiles/<int:user_id>")
+    def community_profile_api(user_id: int):
+        if not has_capability(g.current_user, Capability.ADULT_DIRECTORY):
+            abort(403)
+        return community_profile_fields(discoverable_profile(user_id))
+
+    @app.get("/members/<int:user_id>/profile/photo")
+    @profile_owner_required
+    def community_profile_photo(user_id: int):
+        profile = CommunityProfile.query.filter_by(user_id=user_id).first()
+        if not profile:
+            abort(404)
+        owner = g.current_user.id == user_id
+        reviewer = (
+            has_capability(g.current_user, Capability.ADMIN_REVIEW)
+            and profile.directory_opt_in
+            and profile.status in {"pending", "approved"}
+            and has_capability(profile.user, Capability.ADULT_DIRECTORY)
+        )
+        if not owner and not reviewer:
+            if not has_capability(g.current_user, Capability.ADULT_DIRECTORY):
+                abort(403)
+            profile = discoverable_profile(user_id)
+        if not owner and not profile.show_photo:
+            abort(404)
+        if not profile.photo:
+            abort(404)
+        return send_file(BytesIO(profile.photo), mimetype="image/jpeg",
+                         download_name="profile.jpg", conditional=False, etag=False)
+
+    @app.post("/member/profile/delete")
+    @profile_owner_required
+    def member_profile_delete():
+        if request.form.get("confirm_delete") != "yes":
+            abort(400)
+        delete_community_profile(g.current_user.id)
+        db.session.commit()
+        flash("Your community profile, photo and profile review history were deleted. "
+              "Your membership account is unchanged.", "success")
+        return redirect(url_for("member_profile"))
 
     @app.get("/member/resources")
     @login_required
@@ -1150,6 +1472,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         MembershipTerm.query.filter_by(user_id=member.id).delete(
             synchronize_session=False
         )
+        delete_community_profile(member.id)
         PasswordResetCode.query.filter_by(user_id=member.id).delete(
             synchronize_session=False
         )
@@ -1157,6 +1480,72 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         db.session.commit()
         flash(f"Member record for {member_name} and its associated data were permanently deleted.", "success")
         return redirect(url_for("admin_members"))
+
+    @app.get("/admin/community/profiles")
+    @admin_required
+    def admin_community_profiles():
+        selected_status = request.args.get("status", "pending")
+        if selected_status not in {"pending", "approved"}:
+            abort(400)
+        pending_profiles = (
+            CommunityProfile.query.filter_by(status=selected_status, directory_opt_in=True)
+            .order_by(CommunityProfile.updated_at)
+            .all()
+        )
+        return render_template(
+            "admin_community_profiles.html",
+            title="Community profile review",
+            profiles=[(profile, community_profile_fields(profile)) for profile in pending_profiles
+                      if has_capability(profile.user, Capability.ADULT_DIRECTORY)],
+            selected_status=selected_status,
+        )
+
+    @app.post("/admin/community/profiles/<int:profile_id>/<action>")
+    @admin_required
+    def moderate_community_profile(profile_id: int, action: str):
+        if action not in {"approve", "reject"}:
+            abort(404)
+        profile = CommunityProfile.query.filter_by(id=profile_id).with_for_update().first()
+        if (
+            not profile
+            or profile.status not in ({"pending"} if action == "approve" else {"pending", "approved"})
+            or not profile.directory_opt_in
+        ):
+            abort(404)
+        if not has_capability(profile.user, Capability.ADULT_DIRECTORY):
+            abort(409, description="Only active adult members may be listed.")
+        if request.form.get("profile_version", type=int) != profile.version:
+            abort(409, description="The profile changed. Reload and review the current version.")
+
+        note = request.form.get("moderation_note", "").strip()
+        if len(note) > 500:
+            flash("Moderation note must be 500 characters or fewer.", "error")
+            return redirect(url_for("admin_community_profiles"))
+        profile.status = "approved" if action == "approve" else "rejected"
+        profile.moderation_note = note or None
+        profile.moderated_by_id = g.current_user.id
+        profile.moderated_at = datetime.now(timezone.utc)
+        db.session.add(
+            CommunityProfileReview(
+                profile_id=profile.id,
+                moderator_user_id=g.current_user.id,
+                decision=action,
+                note=note or None,
+                reviewed_at=profile.moderated_at,
+            )
+        )
+        db.session.commit()
+        flash(
+            "Community profile approved." if action == "approve"
+            else "Community profile rejected.",
+            "success",
+        )
+        return redirect(url_for("admin_community_profiles"))
+
+    @app.errorhandler(StaleDataError)
+    def stale_profile_change(error):
+        db.session.rollback()
+        return "The profile changed. Reload it before trying again.", 409
 
     @app.get("/admin/requests")
     @admin_required

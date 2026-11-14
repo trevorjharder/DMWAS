@@ -379,6 +379,61 @@ h3 {
   border-radius: 0.5rem;
   background: var(--surface);
 }
+.community-profile-card {
+  width: min(760px, 100%);
+  margin-bottom: 1.25rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  box-shadow: 0 3px 12px rgb(29 43 42 / 4%);
+}
+.community-profile-card > h2 {
+  margin-top: 0.85rem;
+}
+.community-profile-card section {
+  margin-top: 1.25rem;
+}
+.community-profile-card section h2,
+.community-profile-card section h3 {
+  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+}
+.community-profile-card p {
+  overflow-wrap: anywhere;
+}
+.community-profile-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.profile-form-actions,
+.profile-preview-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.profile-review-status {
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.45rem;
+  background: #f5f7f4;
+}
+.profile-visibility-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.2rem;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.community-profile-review {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.community-profile-review h2 {
+  font-size: 1.3rem;
+}
 .directory-heading {
   display: flex;
   align-items: center;
@@ -674,6 +729,11 @@ h3 {
   color: var(--ink);
   font: inherit;
 }
+.auth-card textarea:focus {
+  outline: 3px solid #9fc2b3;
+  outline-offset: 1px;
+  border-color: var(--forest);
+}
 .contact-form__trap {
   position: absolute;
   width: 1px;
@@ -820,6 +880,11 @@ h3 {
   .request-actions {
     min-width: 0;
   }
+  .profile-form-actions,
+  .profile-preview-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .member-detail__heading {
     align-items: flex-start;
     flex-direction: column;
@@ -854,4 +919,11 @@ h3 {
   .site-footer {
     flex-direction: column;
   }
+}
+.community-profile-photo {
+  width: 128px;
+  height: 128px;
+  max-width: 100%;
+  object-fit: cover;
+  border-radius: 12px;
 }

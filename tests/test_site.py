@@ -9,6 +9,8 @@ from sqlalchemy import inspect
 from werkzeug.security import check_password_hash
 
 from app import (
+    CommunityProfile,
+    CommunityProfileReview,
     MembershipConsent,
     MembershipDetails,
     MembershipPreferences,
@@ -833,6 +835,187 @@ def test_member_directory_is_adult_only_and_reveals_no_profiles_before_opt_in(
     assert b"Search Members" not in client.get("/member").data
 
 
+def test_profile_is_private_by_default_and_owner_can_preview(client, app, make_user):
+    with app.app_context():
+        member = make_user()
+        db.session.add(member)
+        db.session.commit()
+        member_id = member.id
+
+    login_as(client, member_id)
+    edit_page = client.get("/member/profile")
+    assert edit_page.status_code == 200
+    assert b"Your legal" in edit_page.data
+    assert b"name=\"directory_opt_in\"" in edit_page.data
+    assert client.get("/member/profile/preview").status_code == 200
+    assert b"No profile saved yet" in client.get("/member/profile/preview").data
+
+    set_csrf(client)
+    response = client.post(
+        "/member/profile",
+        data={
+            "csrf_token": "test-csrf-token",
+            "display_name": "Coastal Climber",
+            "biography": "I enjoy local trails.",
+            "general_community": "Port McNeill area",
+            "interests": ["Rock climbing", "Hiking"],
+            "participation_goals": ["Join Society activities"],
+            "show_biography": "yes",
+            "show_interests": "yes",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        profile = CommunityProfile.query.filter_by(user_id=member_id).one()
+        assert profile.directory_opt_in is False
+        assert profile.status == "draft"
+        assert profile.show_biography is True
+        assert profile.show_community is False
+        assert profile.show_interests is True
+        assert profile.show_goals is False
+
+    preview = client.get("/member/profile/preview")
+    assert preview.status_code == 200
+    assert b"Private" in preview.data
+    assert b"Coastal Climber" in preview.data
+    assert b"member@example.test" not in preview.data
+    assert b"1 Example Street" not in preview.data
+
+
+def test_opted_in_profile_stays_hidden_until_approved_and_only_shows_selected_fields(
+    client, app, make_user
+):
+    with app.app_context():
+        member = make_user()
+        admin = make_user(is_admin=True)
+        viewer = make_user()
+        db.session.add_all([member, admin, viewer])
+        db.session.commit()
+        member_id, admin_id, viewer_id = member.id, admin.id, viewer.id
+
+    login_as(client, member_id)
+    response = client.post(
+        "/member/profile",
+        data={
+            "csrf_token": "test-csrf-token",
+            "display_name": "Trail Friend",
+            "biography": "A short member biography.",
+            "general_community": "North Island",
+            "interests": ["Hiking"],
+            "participation_goals": ["Join Society activities"],
+            "directory_opt_in": "yes",
+            "show_community": "yes",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        profile = CommunityProfile.query.filter_by(user_id=member_id).one()
+        profile_id = profile.id
+        assert profile.status == "pending"
+
+    login_as(client, viewer_id)
+    assert client.get(f"/members/{member_id}/profile").status_code == 404
+
+    login_as(client, admin_id)
+    queue = client.get("/admin/community/profiles")
+    assert queue.status_code == 200
+    assert b"Trail Friend" in queue.data
+    approved = client.post(
+        f"/admin/community/profiles/{profile_id}/approve",
+        data={"csrf_token": "test-csrf-token", "moderation_note": "Looks good.", "profile_version": "1"},
+    )
+    assert approved.status_code == 302
+    with app.app_context():
+        profile = db.session.get(CommunityProfile, profile_id)
+        assert profile.status == "approved"
+        assert profile.moderated_by_id == admin_id
+        assert profile.moderated_at is not None
+        review = CommunityProfileReview.query.filter_by(profile_id=profile_id).one()
+        assert review.decision == "approve"
+        assert review.moderator_user_id == admin_id
+        assert review.note == "Looks good."
+
+    login_as(client, viewer_id)
+    public_profile = client.get(f"/members/{member_id}/profile")
+    assert public_profile.status_code == 200
+    assert b"Trail Friend" in public_profile.data
+    assert b"North Island" in public_profile.data
+    assert b"A short member biography" not in public_profile.data
+    assert b"Hiking" not in public_profile.data
+    assert b"member@example.test" not in public_profile.data
+    assert b"1 Example Street" not in public_profile.data
+
+
+def test_profile_edit_requires_owner_and_resubmits_for_moderation(client, app, make_user):
+    with app.app_context():
+        owner = make_user()
+        other = make_user()
+        admin = make_user(is_admin=True)
+        db.session.add_all([owner, other, admin])
+        db.session.commit()
+        owner_id, other_id, admin_id = owner.id, other.id, admin.id
+
+    login_as(client, owner_id)
+    assert client.post(
+        "/member/profile",
+        data={
+            "csrf_token": "test-csrf-token",
+            "display_name": "Owner Name",
+            "directory_opt_in": "yes",
+        },
+    ).status_code == 302
+    with app.app_context():
+        profile_id = CommunityProfile.query.filter_by(user_id=owner_id).one().id
+
+    login_as(client, admin_id)
+    client.post(
+        f"/admin/community/profiles/{profile_id}/approve",
+        data={"csrf_token": "test-csrf-token", "profile_version": "1"},
+    )
+    login_as(client, other_id)
+    assert client.get("/member/profile").status_code == 200
+    assert client.get(f"/members/{owner_id}/profile").status_code == 200
+    # The form always saves the current user's own profile, with no user-id input.
+    assert client.post(
+        "/member/profile",
+        data={"csrf_token": "test-csrf-token", "display_name": "Impersonator"},
+    ).status_code == 302
+    with app.app_context():
+        owner_profile = CommunityProfile.query.filter_by(user_id=owner_id).one()
+        other_profile = CommunityProfile.query.filter_by(user_id=other_id).one()
+        assert owner_profile.display_name == "Owner Name"
+        assert owner_profile.status == "approved"
+        assert other_profile.display_name == "Impersonator"
+        assert other_profile.directory_opt_in is False
+
+
+def test_youth_cannot_opt_in_and_profile_search_stays_empty(client, app, make_user):
+    with app.app_context():
+        youth = make_user(
+            birth_date=date(2010, 1, 1),
+            membership_type="youth",
+        )
+        db.session.add(youth)
+        db.session.commit()
+        youth_id = youth.id
+
+    login_as(client, youth_id)
+    response = client.post(
+        "/member/profile",
+        data={
+            "csrf_token": "test-csrf-token",
+            "display_name": "Youth Member",
+            "directory_opt_in": "yes",
+        },
+    )
+    assert response.status_code == 400
+    assert b"Only active adult members may opt in" in response.data
+    with app.app_context():
+        assert CommunityProfile.query.filter_by(user_id=youth_id).first() is None
+
+    assert client.get("/members/search?q=Youth").status_code == 403
+
+
 def test_voting_eligibility_requires_age_19_and_approved_account():
     today = date(2038, 6, 1)
 
@@ -1095,6 +1278,10 @@ def test_admin_can_permanently_delete_member_and_associated_records(client, app)
                 payment_reference="receipt-123",
             )
         )
+        member.community_profile = CommunityProfile(
+            display_name="Delete Me Profile",
+            directory_opt_in=False,
+        )
         db.session.add_all([admin, member])
         db.session.commit()
         admin_id = admin.id
@@ -1117,6 +1304,7 @@ def test_admin_can_permanently_delete_member_and_associated_records(client, app)
         assert MembershipPreferences.query.filter_by(user_id=member_id).count() == 0
         assert MembershipConsent.query.filter_by(user_id=member_id).count() == 0
         assert MembershipTerm.query.filter_by(user_id=member_id).count() == 0
+        assert CommunityProfile.query.filter_by(user_id=member_id).count() == 0
         assert db.session.get(User, admin_id) is not None
 
     response = client.post(

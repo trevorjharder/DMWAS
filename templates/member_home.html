@@ -82,6 +82,19 @@
 
       <article class="hub-card">
         <div class="hub-card__topline">
+          <h3>Community profile</h3>
+          <span class="hub-status {% if community_profile and community_profile.status != 'approved' %}hub-status--paused{% endif %}">
+            {{ community_profile.status|capitalize if community_profile else 'Not created' }}
+          </span>
+        </div>
+        <p>Choose your display name and control exactly what adult directory members can see.</p>
+        <a class="hub-card__link" href="{{ url_for('member_profile') }}">
+          Edit profile and privacy <span aria-hidden="true">→</span>
+        </a>
+      </article>
+
+      <article class="hub-card">
+        <div class="hub-card__topline">
           <h3>Member directory</h3>
           <span class="hub-status hub-status--paused"
             >Privacy controls in progress</span

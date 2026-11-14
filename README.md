@@ -65,6 +65,8 @@ An administrator approves a new application only after confirming required dues 
 
 The `/privacy` page is a draft disclosure, not a substitute for Society-approved privacy policy. Before launch, approve the notice, retention schedule, privacy contact, guardian-consent process, membership-term rules, and director eligibility rules. Application acknowledgements are not recreational waivers.
 
+Community Hub Phase 04 adds member-controlled profiles with independent field/photo visibility, opt-in and administrator review, owner preview, and profile deletion. Inactive members retain access to their own profile privacy controls while directory access remains restricted to active adults. Directory search remains disabled for Phase 05. See [Phase 04 implementation and migration notes](docs/community_hub_phase_04.md) before applying the new migration; an existing Phase 03 database must not be stamped directly to the new migration head.
+
 The constitution supplied so far contains the Society name and purposes, but does not state membership eligibility, dues, payment confirmation, or approval authority. The current website follows the owner-confirmed rule that overdue/unpaid accounts are inactive and renewal requires payment confirmation plus administrator approval. Dues are not collected online. Declined-request retention and reapplication rules are not yet decided.
 
 ## Next steps

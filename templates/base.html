@@ -93,6 +93,19 @@
           %}
           >Resources</a
         >
+        <a
+          href="{{ url_for('member_profile') }}"
+          {%
+          if
+          endpoint
+          in
+          ['member_profile', 'member_profile_preview']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Community profile</a
+        >
         {% if can_access_adult_hub %}
         <a
           href="{{ url_for('member_search') }}"
@@ -133,6 +146,19 @@
           endif
           %}
           >Access Requests</a
+        >
+        <a
+          href="{{ url_for('admin_community_profiles') }}"
+          {%
+          if
+          endpoint
+          in
+          ['admin_community_profiles', 'moderate_community_profile']
+          %}aria-current="page"
+          {%
+          endif
+          %}
+          >Profile review</a
         >
         {% endif %}
       </div>

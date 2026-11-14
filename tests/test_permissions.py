@@ -35,6 +35,15 @@ def test_public_activity_browsing_does_not_require_an_account():
     assert has_capability(None, Capability.PUBLIC_ACTIVITY_READ)
 
 
+@pytest.mark.parametrize("status,allowed", [
+    ("active", True), ("inactive", True), ("expired", True),
+    ("pending", False), ("rejected", False),
+])
+def test_profile_management_preserves_privacy_choices_after_expiry(status, allowed):
+    assert has_capability(make_user(status=status), Capability.PROFILE_MANAGEMENT) is allowed
+    assert not has_capability(None, Capability.PROFILE_MANAGEMENT)
+
+
 @pytest.mark.parametrize("capability", [Capability.ACCOUNT_ACCESS, Capability.ACTIVITY_REGISTRATION])
 def test_active_members_can_access_account_and_register(capability):
     assert has_capability(make_user(), capability, today=TODAY)
