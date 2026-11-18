@@ -87,7 +87,7 @@
             {{ community_profile.status|capitalize if community_profile else 'Not created' }}
           </span>
         </div>
-        <p>Choose your display name and control exactly what directory members can see.</p>
+        <p>Choose your display name and control exactly what adult directory members can see.</p>
         <a class="hub-card__link" href="{{ url_for('member_profile') }}">
           Edit profile and privacy <span aria-hidden="true">→</span>
         </a>
@@ -96,16 +96,17 @@
       <article class="hub-card">
         <div class="hub-card__topline">
           <h3>Member directory</h3>
-          <span class="hub-status"
-            >Available to adult members</span
+          <span class="hub-status hub-status--paused"
+            >Privacy controls in progress</span
           >
         </div>
         <p>
-          Find members by display name and shared interests, community or goals.
+          Member discovery is paused until profile privacy and opt-in controls
+          are available.
         </p>
         {% if can_access_adult_hub %}
         <a class="hub-card__link" href="{{ url_for('member_search') }}">
-          Browse member directory <span aria-hidden="true">→</span>
+          View directory status <span aria-hidden="true">→</span>
         </a>
         {% else %}
         <p class="hub-card__note">
@@ -114,12 +115,14 @@
         {% endif %}
       </article>
 
-      <article class="hub-card hub-card--upcoming">
+      <article class="hub-card">
         <div class="hub-card__topline">
           <h3>Activities</h3>
-          <span class="hub-status">Coming later</span>
         </div>
-        <p>Activity listings and registration are being prepared.</p>
+        <p><a class="hub-card__link" href="{{ url_for('activities.public_list') }}">Browse activities</a></p>
+        {% if can_use_activity_workspace %}
+        <a class="hub-card__link" href="{{ url_for('activities.member_list') }}">Manage proposals and invitations</a>
+        {% endif %}
       </article>
 
       <article class="hub-card hub-card--upcoming">

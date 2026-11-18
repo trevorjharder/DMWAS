@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import form_tokens, listing_details, organizer_details with context %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p><a href="{{ url_for('.member_list') }}">My activities</a></p>
+    <h1>{{ title }}</h1>
+    {% if invitation.status == 'invited' %}
+    <p>You have been invited to co-organize this activity. An administrator reviews your assignment after you accept.</p>
+    <form method="post" action="{{ url_for('.member_coorganizer_transition', activity_id=activity.id, user_id=invitation.user_id, action='accept') }}">
+      {{ form_tokens(activity) }}
+      <button class="button button--primary" type="submit">Accept invitation</button>
+      <button class="button button--secondary" type="submit" formaction="{{ url_for('.member_coorganizer_transition', activity_id=activity.id, user_id=invitation.user_id, action='decline') }}">Decline invitation</button>
+    </form>
+    {% else %}
+      {% if invitation.status == 'accepted' %}
+      <p>Your co-organizer assignment is awaiting administrator approval.</p>
+      {% elif revision %}
+      <h2>Approved activity</h2>
+      {{ listing_details(revision.public_details, locations) }}
+      <h2>Private organizer details</h2>
+      {{ organizer_details(revision.organizer_details, organizer_fields, modes) }}
+      {% else %}
+      <p>Your assignment is approved. Organizer details are available when the primary organizer is eligible and the activity is approved.</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('.member_coorganizer_transition', activity_id=activity.id, user_id=invitation.user_id, action='leave') }}">
+        {{ form_tokens(activity) }}
+        <button class="button button--secondary" type="submit">Leave co-organizer role</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -30,6 +30,7 @@
       <nav class="site-nav" aria-label="Main navigation">
         <a href="{{ url_for('about') }}">About</a>
         <a href="{{ url_for('notices') }}">Notices</a>
+        <a href="{{ url_for('activities.public_list') }}" {% if request.endpoint in ['activities.public_list', 'activities.public_detail'] %}aria-current="page"{% endif %}>Activities</a>
         <a href="{{ url_for('contact') }}">Contact</a>
         <a href="{{ url_for('donate') }}">Donate</a>
         {% if current_user and session.get('renewal_only') and
@@ -120,7 +121,12 @@
           %}
           >Search Members</a
         >
-        {% endif %} {% if current_user.is_admin %}
+        {% endif %}
+        {% if can_use_activity_workspace %}
+        <a href="{{ url_for('activities.member_list') }}" {% if endpoint in ['activities.member_list', 'activities.new_activity', 'activities.member_detail', 'activities.edit_activity'] %}aria-current="page"{% endif %}>My activities</a>
+        {% endif %}
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('activities.admin_list') }}" {% if endpoint in ['activities.admin_list', 'activities.admin_detail'] %}aria-current="page"{% endif %}>Activity review</a>
         <a
           href="{{ url_for('admin_members') }}"
           {%
@@ -160,7 +166,6 @@
           %}
           >Profile review</a
         >
-        <a href="{{ url_for('admin_community_records') }}" {% if endpoint == 'admin_community_records' %}aria-current="page"{% endif %}>Verified records</a>
         {% endif %}
       </div>
     </nav>

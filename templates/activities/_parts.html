@@ -1,0 +1,43 @@
+{% macro form_tokens(activity=None) %}
+<input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+{% if activity %}
+<input type="hidden" name="lock_version" value="{{ activity.lock_version }}" />
+{% endif %}
+{% endmacro %}
+
+{% macro pagination(page, has_next, endpoint, params) %}
+{% if page > 1 or has_next %}
+<nav class="form-options" aria-label="Page navigation">
+  {% if page > 1 %}<a href="{{ url_for(endpoint, page=page-1, **params) }}">Previous page</a>{% endif %}
+  {% if has_next %}<a href="{{ url_for(endpoint, page=page+1, **params) }}">Next page</a>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro schedule(details) %}
+{% if details.starts %}
+<p>
+  <time datetime="{{ details.starts }}">{{ details.starts|replace('T', ' ') }}</time>
+  {% if details.ends %} to <time datetime="{{ details.ends }}">{{ details.ends|replace('T', ' ') }}</time>{% endif %}
+  ({{ details.time_zone }})
+</p>
+{% endif %}
+{% endmacro %}
+
+{% macro listing_details(details, locations) %}
+<p>{{ details.category }} · {{ locations.get(details.location, '') }}</p>
+{{ schedule(details) }}
+<p>{{ details.summary }}</p>
+{% endmacro %}
+
+{% macro organizer_details(details, fields, modes) %}
+<dl>
+  <dt>Capacity</dt><dd>{{ details.capacity or 'Pending' }}</dd>
+  <dt>Registration mode</dt><dd>{{ modes.get(details.registration_mode, 'Pending') }}</dd>
+  {% for key, (label, _) in fields.items() %}
+  {% if details[key] %}
+  <dt>{{ label }}</dt><dd>{{ details[key] }}</dd>
+  {% endif %}
+  {% endfor %}
+</dl>
+{% endmacro %}

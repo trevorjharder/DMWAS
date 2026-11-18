@@ -16,7 +16,7 @@
       {% if profile.moderation_note %}<br />Reviewer note: {{ profile.moderation_note }}{% endif %}
     </p>
     {% endif %}
-    <form method="post" enctype="multipart/form-data">
+    <form method="post">
       <input
         type="hidden"
         name="csrf_token"
@@ -27,7 +27,6 @@
       {% set community_checked = (request.form.get('show_community') == 'yes') if request.method == 'POST' else (profile.show_community if profile else false) %}
       {% set interests_checked = (request.form.get('show_interests') == 'yes') if request.method == 'POST' else (profile.show_interests if profile else false) %}
       {% set goals_checked = (request.form.get('show_goals') == 'yes') if request.method == 'POST' else (profile.show_goals if profile else false) %}
-      {% set photo_checked = (request.form.get('show_photo') == 'yes') if request.method == 'POST' else (profile.show_photo if profile else false) %}
 
       <label for="display_name">Display name</label>
       <input
@@ -41,14 +40,6 @@
 
       <label for="biography">Short biography</label>
       <textarea id="biography" name="biography" maxlength="500" rows="4">{{ request.form.get('biography', profile.biography if profile else '') }}</textarea>
-
-      <label for="photo">Optional profile photo</label>
-      {% if profile and profile.photo %}
-      <img class="community-profile-photo" src="{{ url_for('community_profile_photo', user_id=profile.user_id) }}" alt="Your saved profile photo" width="128" height="128" />
-      <label class="check-label"><input type="checkbox" name="remove_photo" value="yes" />Remove saved photo</label>
-      {% endif %}
-      <input id="photo" name="photo" type="file" accept="image/jpeg,image/png" aria-describedby="photo-help" />
-      <p id="photo-help" class="form-hint">Still JPEG or PNG, up to 2 MB and 16 million pixels. Photos are resized and location metadata is removed. Choose a photo without other people's personal information.</p>
 
       <label for="general_community">General community or area</label>
       <input
@@ -93,20 +84,10 @@
       </fieldset>
 
       <h2>Privacy controls</h2>
-      <fieldset class="form-options">
-        <legend>Verified activity and volunteer highlights</legend>
-        <p>Choose up to ten of your own verified records. Private, sensitive or revoked records cannot be shared.</p>
-        {% set chosen = request.form.getlist('highlights') if request.method == 'POST' else (profile.highlights|map(attribute='record_id')|map('string')|list if profile else []) %}
-        {% for record in highlight_records %}
-        <label class="check-label"><input type="checkbox" name="highlights" value="{{ record.id }}" {% if record.id|string in chosen %}checked{% endif %} />{{ record.title }} · {{ record.occurred_on }}{% if record.record_type == 'volunteer' %} · {{ record.volunteer_minutes }} minutes{% endif %}</label>
-        {% else %}<p>No shareable verified records yet. An administrator must verify a record before it is available here.</p>{% endfor %}
-        {% set highlights_checked = (request.form.get('show_highlights') == 'yes') if request.method == 'POST' else (profile.show_highlights if profile else false) %}
-        <label class="check-label"><input type="checkbox" name="show_highlights" value="yes" {% if highlights_checked %}checked{% endif %} />Show my selected verified highlights</label>
-      </fieldset>
       <p class="form-hint">
-        Directory opt-in is off by default. Eligible adult members' opted-in
-        profiles are automatically approved when saved. Each optional field
-        below is hidden unless you select it.
+        Directory opt-in is off by default. An opted-in profile stays hidden
+        until an administrator approves it. Each optional field below is hidden
+        unless you select it.
       </p>
       <label class="check-label">
         <input
@@ -115,7 +96,7 @@
           value="yes"
           {% if directory_checked %}checked{% endif %}
         />
-        I want my display name to appear in the directory.
+        I want my display name to appear in the adult member directory after review.
       </label>
       <label class="check-label">
         <input type="checkbox" name="show_biography" value="yes" {% if biography_checked %}checked{% endif %} />
@@ -134,26 +115,15 @@
         Show my participation goals
       </label>
 
-      <label class="check-label">
-        <input type="checkbox" name="show_photo" value="yes" {% if photo_checked %}checked{% endif %} />
-        Show my photo
-      </label>
-      <p class="form-hint">Only the fields you select are shared. Your opted-in profile and edits are automatically approved. Administrators can still unpublish profiles.</p>
+      <p class="form-hint">
+        Profile photos are not enabled while the Society selects and configures
+        approved image storage and moderation.
+      </p>
       <div class="profile-form-actions">
         <button class="button button--primary" type="submit">Save profile</button>
         <a class="button button--secondary" href="{{ url_for('member_profile_preview') }}">Preview saved profile</a>
       </div>
     </form>
-    {% if profile %}
-    <hr />
-    <form method="post" action="{{ url_for('member_profile_delete') }}">
-      <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
-      <h2>Delete community profile</h2>
-      <p>This removes your profile, photo and profile review history from the live site. It keeps your membership account and records. Copies in backups follow the Society's retention policy.</p>
-      <label class="check-label"><input type="checkbox" name="confirm_delete" value="yes" required />I want to delete my community profile.</label>
-      <button class="button button--danger" type="submit">Delete profile</button>
-    </form>
-    {% endif %}
   </div>
 </section>
 {% endblock %}

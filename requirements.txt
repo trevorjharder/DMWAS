@@ -5,3 +5,4 @@ psycopg2-binary==2.9.10
 gunicorn==23.0.0
 pytest==8.3.4
 Pillow==13.0.0
+tzdata==2026.6

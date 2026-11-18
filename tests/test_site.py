@@ -882,7 +882,7 @@ def test_profile_is_private_by_default_and_owner_can_preview(client, app, make_u
     assert b"1 Example Street" not in preview.data
 
 
-def test_opted_in_profile_is_auto_approved_and_only_shows_selected_fields(
+def test_opted_in_profile_stays_hidden_until_approved_and_only_shows_selected_fields(
     client, app, make_user
 ):
     with app.app_context():
@@ -911,13 +911,29 @@ def test_opted_in_profile_is_auto_approved_and_only_shows_selected_fields(
     with app.app_context():
         profile = CommunityProfile.query.filter_by(user_id=member_id).one()
         profile_id = profile.id
+        assert profile.status == "pending"
+
+    login_as(client, viewer_id)
+    assert client.get(f"/members/{member_id}/profile").status_code == 404
+
+    login_as(client, admin_id)
+    queue = client.get("/admin/community/profiles")
+    assert queue.status_code == 200
+    assert b"Trail Friend" in queue.data
+    approved = client.post(
+        f"/admin/community/profiles/{profile_id}/approve",
+        data={"csrf_token": "test-csrf-token", "moderation_note": "Looks good."},
+    )
+    assert approved.status_code == 302
+    with app.app_context():
+        profile = db.session.get(CommunityProfile, profile_id)
         assert profile.status == "approved"
-        assert profile.moderated_by_id == member_id
+        assert profile.moderated_by_id == admin_id
         assert profile.moderated_at is not None
         review = CommunityProfileReview.query.filter_by(profile_id=profile_id).one()
         assert review.decision == "approve"
-        assert review.moderator_user_id == member_id
-        assert review.note == "Automatically approved on member save."
+        assert review.moderator_user_id == admin_id
+        assert review.note == "Looks good."
 
     login_as(client, viewer_id)
     public_profile = client.get(f"/members/{member_id}/profile")
@@ -930,7 +946,7 @@ def test_opted_in_profile_is_auto_approved_and_only_shows_selected_fields(
     assert b"1 Example Street" not in public_profile.data
 
 
-def test_profile_edit_requires_owner(client, app, make_user):
+def test_profile_edit_requires_owner_and_resubmits_for_moderation(client, app, make_user):
     with app.app_context():
         owner = make_user()
         other = make_user()
@@ -951,6 +967,11 @@ def test_profile_edit_requires_owner(client, app, make_user):
     with app.app_context():
         profile_id = CommunityProfile.query.filter_by(user_id=owner_id).one().id
 
+    login_as(client, admin_id)
+    client.post(
+        f"/admin/community/profiles/{profile_id}/approve",
+        data={"csrf_token": "test-csrf-token"},
+    )
     login_as(client, other_id)
     assert client.get("/member/profile").status_code == 200
     assert client.get(f"/members/{owner_id}/profile").status_code == 200

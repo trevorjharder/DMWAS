@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import listing_details %}
+{% set title = listing.public_details.title %}
+{% block content %}
+<div class="hub-dashboard">
+  <p><a href="{{ url_for('.public_list') }}">All activities</a></p>
+  <article class="hub-card">
+    <p>{{ 'Society activity' if listing.classification == 'official' else 'Member-organized activity' }}</p>
+    <h1>{{ title }}</h1>
+    {{ listing_details(listing.public_details, locations) }}
+  </article>
+</div>
+{% endblock %}
