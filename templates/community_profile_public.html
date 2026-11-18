@@ -5,6 +5,7 @@
 </section>
 <section class="directory-section">
   <article class="community-profile-card" aria-label="Member profile">
+    {% include "profile_highlights.html" %}
     {% if public_fields.photo_url %}<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Profile photo for {{ public_fields.display_name }}" width="128" height="128" />{% endif %}
     {% if public_fields.biography %}
     <section><h2>About</h2><p>{{ public_fields.biography }}</p></section>

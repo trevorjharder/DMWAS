@@ -927,3 +927,11 @@ h3 {
   object-fit: cover;
   border-radius: 12px;
 }
+
+.directory-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
+.directory-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.directory-filters label, .verified-record-form label { display: block; margin-top: .75rem; }
+.directory-filters input, .directory-filters select, .verified-record-form input:not([type="checkbox"]), .verified-record-form select { width: 100%; padding: .65rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.directory-pagination { display: flex; gap: 1.5rem; flex-wrap: wrap; margin: 1.5rem 0; }
+.verified-record-form { max-width: 650px; padding: 1rem 0; }
+.community-profile-card { overflow-wrap: anywhere; }

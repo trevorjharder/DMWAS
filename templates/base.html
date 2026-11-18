@@ -160,6 +160,7 @@
           %}
           >Profile review</a
         >
+        <a href="{{ url_for('admin_community_records') }}" {% if endpoint == 'admin_community_records' %}aria-current="page"{% endif %}>Verified records</a>
         {% endif %}
       </div>
     </nav>

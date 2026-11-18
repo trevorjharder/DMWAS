@@ -96,17 +96,16 @@
       <article class="hub-card">
         <div class="hub-card__topline">
           <h3>Member directory</h3>
-          <span class="hub-status hub-status--paused"
-            >Privacy controls in progress</span
+          <span class="hub-status"
+            >Available to adult members</span
           >
         </div>
         <p>
-          Member discovery is paused until profile privacy and opt-in controls
-          are available.
+          Find members by display name and shared interests, community or goals.
         </p>
         {% if can_access_adult_hub %}
         <a class="hub-card__link" href="{{ url_for('member_search') }}">
-          View directory status <span aria-hidden="true">→</span>
+          Browse member directory <span aria-hidden="true">→</span>
         </a>
         {% else %}
         <p class="hub-card__note">

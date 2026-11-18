@@ -1,0 +1,5 @@
+{% if public_fields.highlights %}
+<section><h2>Verified highlights</h2><ul>
+{% for item in public_fields.highlights %}<li><strong>{{ item.title }}</strong> · {{ item.date }} · {{ item.type|capitalize }}{% if item.type == 'volunteer' %} · {{ item.volunteer_minutes }} minutes{% endif %}</li>{% endfor %}
+</ul></section>
+{% endif %}

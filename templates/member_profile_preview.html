@@ -17,6 +17,7 @@
     <p class="hub-status hub-status--paused">Private — directory opt-in is off</p>
     {% endif %}
     <h2>{{ profile.display_name }}</h2>
+    {% include "profile_highlights.html" %}
     {% if public_fields.photo_url %}<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Your profile photo" width="128" height="128" />{% endif %}
     {% if public_fields.biography %}
     <section><h3>About</h3><p>{{ public_fields.biography }}</p></section>

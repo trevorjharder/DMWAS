@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% macro record_fields(record, prefix) %}
+<label for="{{ prefix }}-title">Shareable summary</label><input id="{{ prefix }}-title" name="title" maxlength="160" required value="{{ record.title if record else '' }}" />
+<p class="form-hint">Do not include private locations or other participants' details.</p>
+<label for="{{ prefix }}-kind">Record type</label><select id="{{ prefix }}-kind" name="record_type"><option value="activity">Activity</option><option value="volunteer" {% if record and record.record_type == 'volunteer' %}selected{% endif %}>Volunteer contribution</option></select>
+<label for="{{ prefix }}-date">Completion date</label><input id="{{ prefix }}-date" type="date" name="occurred_on" required value="{{ record.occurred_on if record else '' }}" />
+<label for="{{ prefix }}-minutes">Volunteer minutes (volunteer records only)</label><input id="{{ prefix }}-minutes" type="number" name="volunteer_minutes" min="1" max="600000" value="{{ record.volunteer_minutes if record and record.volunteer_minutes else '' }}" />
+<label class="check-label"><input type="checkbox" name="verified" value="yes" {% if record and record.verified %}checked{% endif %} />I verified this completed record (uncheck to revoke verification).</label>
+<label class="check-label"><input type="checkbox" name="shareable" value="yes" {% if record and record.shareable %}checked{% endif %} />Safe for the member to share in the adult directory</label>
+<label class="check-label"><input type="checkbox" name="sensitive" value="yes" {% if record and record.sensitive %}checked{% endif %} />Underlying activity is sensitive (always prevents sharing)</label>
+{% endmacro %}
+{% block content %}
+<section class="page-heading"><p class="eyebrow">Administration</p><h1>Verified community records</h1><p>Verify completed activities and volunteer contributions. Private and sensitive activities cannot be shared. Members choose their own highlights.</p></section>
+<section class="directory-section">
+<details><summary>Add a verified record</summary><form method="post" class="verified-record-form">
+<input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+<label for="record-member">Member</label><select name="user_id" id="record-member" required>{% for member in members %}<option value="{{ member.id }}">{{ member.member_number }} · {{ member.full_name }}</option>{% endfor %}</select>
+{{ record_fields(none, 'new') }}<button class="button button--primary">Save record</button></form></details>
+{% for record in records %}<article class="community-profile-card"><h2>{{ record.title }}</h2><p>{{ record.user.member_number }} · {{ record.user.full_name }}</p>
+<details><summary>Edit verification and sharing</summary><form method="post" class="verified-record-form">
+<input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" /><input type="hidden" name="record_id" value="{{ record.id }}" /><input type="hidden" name="user_id" value="{{ record.user_id }}" />
+{{ record_fields(record, record.id|string) }}<button class="button button--primary">Save changes</button></form></details></article>
+{% else %}<div class="empty-state"><h2>No verified records yet</h2><p>Add a completed activity or volunteer contribution above.</p></div>{% endfor %}
+<nav class="directory-pagination" aria-label="Verified record pages">{% if page > 1 %}<a href="{{ url_for('admin_community_records', page=page-1) }}">Previous page</a>{% endif %}{% if has_next %}<a href="{{ url_for('admin_community_records', page=page+1) }}">Next page</a>{% endif %}</nav>
+</section>{% endblock %}

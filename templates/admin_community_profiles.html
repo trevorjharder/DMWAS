@@ -4,6 +4,7 @@
   <h1>Community profile review</h1>
   <p>Only profiles with explicit adult-member opt-in are shown in this queue.</p>
 </section>
+<p><a href="{{ url_for('admin_community_records') }}">Manage verified activity and volunteer records</a></p>
 <p><a href="{{ url_for('admin_community_profiles') }}">Pending review</a> · <a href="{{ url_for('admin_community_profiles', status='approved') }}">Approved profiles</a></p>
 {% if profiles %}
 <section class="request-list">
@@ -11,6 +12,7 @@
   <article class="request-card">
     <div class="community-profile-review">
       <h2>{{ profile.display_name }}</h2>
+      {% include "profile_highlights.html" %}
       <p class="form-hint">Submitted {{ profile.updated_at.strftime('%Y-%m-%d') }} · {{ profile.status|capitalize }}</p>
       {% if public_fields.photo_url %}<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Submitted profile photo" width="128" height="128" />{% endif %}
       {% if public_fields.biography %}<p>{{ public_fields.biography }}</p>{% endif %}
