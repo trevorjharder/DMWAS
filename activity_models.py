@@ -82,7 +82,16 @@ def anonymize_activity_member(user_id, actor_id):
         ))
         activity.organizer_id = None
         activity.status = new_status
-    ActivityCoorganizer.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    memberships = db.session.query(Activity, ActivityCoorganizer).join(
+        ActivityCoorganizer, ActivityCoorganizer.activity_id == Activity.id,
+    ).filter(ActivityCoorganizer.user_id == user_id)
+    for activity, invitation in memberships:
+        activity.touch()
+        db.session.add(ActivityAudit(
+            activity_id=activity.id, actor_id=actor_id, revision_number=activity.revision_number,
+            action="coorganizer_removed", previous_status=invitation.status, new_status="removed",
+        ))
+        db.session.delete(invitation)
     ActivityActionWindow.query.filter_by(user_id=user_id).delete(synchronize_session=False)
     ActivityAudit.query.filter_by(actor_id=user_id).update(
         {"actor_id": None}, synchronize_session=False)

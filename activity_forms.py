@@ -78,7 +78,7 @@ def validate_activity(public, organizer, *, submitting=False):
         errors.append("Enter a capacity between 1 and 1,000.")
 
     starts_at = ends_at = None
-    if public["starts"] or public["ends"] or submitting:
+    if public["time_zone"] in TIME_ZONES and (public["starts"] or public["ends"]):
         try:
             zone = ZoneInfo(public["time_zone"])
             if public["starts"]:
@@ -89,10 +89,10 @@ def validate_activity(public, organizer, *, submitting=False):
             errors.append("Enter dates and times that occur exactly once in the selected time zone.")
         if starts_at and ends_at and ends_at <= starts_at:
             errors.append("The end must be after the start.")
-        if submitting and (not starts_at or not ends_at or starts_at <= datetime.now(timezone.utc)):
-            errors.append("Enter a future start and an end date and time.")
 
     if submitting:
+        if not starts_at or not ends_at or starts_at <= datetime.now(timezone.utc):
+            errors.append("Enter a future start and an end date and time.")
         for values, name, label in (
             (public, "title", "an activity title"),
             (public, "summary", "a public summary"),

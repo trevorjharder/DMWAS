@@ -1365,7 +1365,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         anonymize_activity_member(member.id, g.current_user.id)
         db.session.delete(member)
         db.session.commit()
-        flash(f"Member record for {member_name} and its associated data were permanently deleted.", "success")
+        flash(f"Member record for {member_name} was permanently deleted.", "success")
         return redirect(url_for("admin_members"))
 
     @app.get("/admin/community/profiles")

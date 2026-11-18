@@ -69,6 +69,8 @@ Community Hub Phase 04 adds member-controlled profiles with independent field/ph
 
 The constitution supplied so far contains the Society name and purposes, but does not state membership eligibility, dues, payment confirmation, or approval authority. The current website follows the owner-confirmed rule that overdue/unpaid accounts are inactive and renewal requires payment confirmation plus administrator approval. Dues are not collected online. Declined-request retention and reapplication rules are not yet decided.
 
+Community Hub Phase 06 adds activity proposals, administrator review, co-organizer approvals, and public activity listings. See the [Phase 06 workflow and migration notes](Docs/community_hub_phase_06.md) for the publication gate and recovery steps.
+
 ## Next steps
 
 Before launch, provide approved public contact details, logo/colors/photos, any initial notices, and the Society's membership/approval policy. Configure and test the email delivery service securely in Railway. Member documents, the member directory, notice editing, and online dues payments are outside this first implementation step.

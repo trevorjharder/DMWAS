@@ -91,8 +91,6 @@ def commit_activity():
 
 
 def limit_activity_action():
-    if can_review(g.current_user):
-        return
     retry_after = account_quota_retry_after(
         ActivityActionWindow, g.current_user.id, current_app.config["ACTIVITY_ACTIONS_PER_MINUTE"])
     if retry_after is not None:
@@ -392,7 +390,9 @@ def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_r
     @admin_required
     def admin_detail(activity_id):
         activity = db.get_or_404(Activity, activity_id)
-        number = request.args.get("revision", activity.revision_number, type=int)
+        number = request.args.get("revision", type=int) if "revision" in request.args else activity.revision_number
+        if not number or not 1 <= number <= activity.revision_number:
+            abort(404)
         revision = db.get_or_404(ActivityRevision, (activity.id, number))
         organizer = db.session.get(User, activity.organizer_id) if activity.organizer_id else None
         audit_query = ActivityAudit.query.filter_by(activity_id=activity_id).order_by(
