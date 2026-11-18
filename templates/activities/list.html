@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import pagination, schedule %}
+{% block content %}
+<div class="hub-dashboard">
+  <header class="hub-welcome">
+    <div>
+      <h1>{{ title }}</h1>
+      {% if view == 'member' %}<p>Manage proposals and respond to co-organizer invitations.</p>{% endif %}
+    </div>
+    {% if view == 'member' %}<a class="button button--primary" href="{{ url_for('.new_activity') }}">New activity draft</a>{% endif %}
+  </header>
+
+  {% if view == 'admin' %}
+  <form class="form-options" method="get">
+    <label for="status">Show</label>
+    <select id="status" name="status">
+      {% for key, label in statuses.items() %}
+      <option value="{{ key }}" {% if status == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+      <option value="coorganizers" {% if status == 'coorganizers' %}selected{% endif %}>Co-organizers awaiting approval</option>
+    </select>
+    <button type="submit" class="button button--secondary">Apply filter</button>
+  </form>
+  {% endif %}
+
+  <div class="hub-grid">
+    {% for row in rows %}
+    {% set activity_id, state, details = row[:3] %}
+    <article class="hub-card">
+      {% if view == 'public' %}
+        {% set detail_endpoint = '.public_detail' %}
+        <p>{{ 'Society activity' if state == 'official' else 'Member-organized activity' }}</p>
+      {% elif view == 'admin' %}
+        {% set detail_endpoint = '.admin_detail' %}
+        <p>{{ statuses[state] }}</p>
+      {% else %}
+        {% set detail_endpoint = '.member_detail' %}
+        <p>{{ 'Co-organizer · ' ~ (row[3]|capitalize) if row[3] else statuses[state] }}</p>
+      {% endif %}
+      <h2><a href="{{ url_for(detail_endpoint, activity_id=activity_id) }}">{{ details.title or 'Untitled activity' }}</a></h2>
+      {% if view == 'public' %}
+      <p>{{ details.category }} · {{ location_label(details.location) }}</p>
+      {{ schedule(details) }}
+      <p>{{ details.summary }}</p>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% if not rows %}
+  <p>{{ 'There are no upcoming activities listed.' if view == 'public' else 'No activities on this page.' }}</p>
+  {% endif %}
+  {{ pagination(page, has_next, request.endpoint, {'status': status} if view == 'admin' else {}) }}
+</div>
+{% endblock %}

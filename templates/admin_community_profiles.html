@@ -1,0 +1,53 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Administration</p>
+  <h1>Community profile review</h1>
+  <p>Only profiles with explicit adult-member opt-in are shown in this queue.</p>
+</section>
+<p><a href="{{ url_for('admin_community_records') }}">Manage verified activity and volunteer records</a></p>
+<p><a href="{{ url_for('admin_community_profiles') }}">Pending review</a> · <a href="{{ url_for('admin_community_profiles', status='approved') }}">Approved profiles</a></p>
+{% if profiles %}
+<section class="request-list">
+  {% for profile, public_fields in profiles %}
+  <article class="request-card">
+    <div class="community-profile-review">
+      <h2>{{ profile.display_name }}</h2>
+      <p class="form-hint">Submitted {{ profile.updated_at.strftime('%Y-%m-%d') }} · {{ profile.status|capitalize }}</p>
+      {% if public_fields.photo_url %}<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Submitted profile photo" width="128" height="128" />{% endif %}
+      {% if public_fields.biography %}<p>{{ public_fields.biography }}</p>{% endif %}
+      {% if public_fields.community %}<p>General area: {{ public_fields.community }}</p>{% endif %}
+      {% if public_fields.interests %}<p>Interests: {{ public_fields.interests|join(', ') }}</p>{% endif %}
+      {% if public_fields.goals %}<p>Goals: {{ public_fields.goals|join(', ') }}</p>{% endif %}
+      {% include "profile_highlights.html" %}
+      <ul class="profile-visibility-summary">
+        <li>Biography: {{ 'visible' if profile.show_biography else 'hidden' }}</li>
+        <li>Area: {{ 'visible' if profile.show_community else 'hidden' }}</li>
+        <li>Interests: {{ 'visible' if profile.show_interests else 'hidden' }}</li>
+        <li>Goals: {{ 'visible' if profile.show_goals else 'hidden' }}</li>
+      </ul>
+    </div>
+    <div class="request-actions">
+      {% if profile.status == 'pending' %}
+      <form method="post" action="{{ url_for('moderate_community_profile', profile_id=profile.id, action='approve') }}">
+        <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+        <input type="hidden" name="profile_version" value="{{ profile.version }}" />
+        <label for="approve-note-{{ profile.id }}">Optional reviewer note</label>
+        <input id="approve-note-{{ profile.id }}" name="moderation_note" maxlength="500" />
+        <button class="button button--primary" type="submit">Approve profile</button>
+      </form>
+      {% endif %}
+      <form method="post" action="{{ url_for('moderate_community_profile', profile_id=profile.id, action='reject') }}">
+        <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+        <input type="hidden" name="profile_version" value="{{ profile.version }}" />
+        <label for="reject-note-{{ profile.id }}">Reason or feedback</label>
+        <input id="reject-note-{{ profile.id }}" name="moderation_note" maxlength="500" />
+        <button class="button button--danger" type="submit">{{ 'Unpublish profile' if profile.status == 'approved' else 'Reject profile' }}</button>
+      </form>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% else %}
+<section class="empty-state"><h2>No {{ selected_status }} profiles</h2></section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Community Hub</p>
+  <h1>Profile preview</h1>
+  <p>This private preview is visible only to you.</p>
+</section>
+<section class="directory-section">
+  {% if profile %}
+  <article class="community-profile-card">
+    {% if not eligible %}
+    <p class="hub-status hub-status--paused">Private — directory eligibility is required</p>
+    {% elif profile.directory_opt_in and profile.status == 'approved' %}
+    <p class="hub-status">Approved for directory</p>
+    {% elif profile.directory_opt_in %}
+    <p class="hub-status hub-status--paused">Hidden until administrator approval</p>
+    {% else %}
+    <p class="hub-status hub-status--paused">Private — directory opt-in is off</p>
+    {% endif %}
+    <h2>{{ profile.display_name }}</h2>
+    {% if public_fields.photo_url %}<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Your profile photo" width="128" height="128" />{% endif %}
+    {% if public_fields.biography %}
+    <section><h3>About</h3><p>{{ public_fields.biography }}</p></section>
+    {% endif %}
+    {% if public_fields.community %}
+    <p><strong>Area:</strong> {{ public_fields.community }}</p>
+    {% endif %}
+    {% if public_fields.interests %}
+    <section><h3>Interests</h3><ul>{% for interest in public_fields.interests %}<li>{{ interest }}</li>{% endfor %}</ul></section>
+    {% endif %}
+    {% if public_fields.goals %}
+    <section><h3>Participation goals</h3><ul>{% for goal in public_fields.goals %}<li>{{ goal }}</li>{% endfor %}</ul></section>
+    {% endif %}
+    {% include "profile_highlights.html" %}
+    {% if public_fields|length == 1 %}
+    <p class="form-hint">Only your display name is selected for visibility.</p>
+    {% endif %}
+  </article>
+  {% else %}
+  <section class="empty-state">
+    <h2>No profile saved yet</h2>
+    <p>Create a profile and choose visibility settings to preview it.</p>
+  </section>
+  {% endif %}
+  <p class="profile-preview-actions">
+    <a class="button button--primary" href="{{ url_for('member_profile') }}">Edit profile</a>
+    <a href="{{ url_for('member_home') }}">Back to member hub</a>
+  </p>
+</section>
+{% endblock %}

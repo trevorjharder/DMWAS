@@ -1,6 +1,9 @@
+from datetime import date
+from itertools import count
+
 import pytest
 
-from app import create_app, db
+from app import MembershipDetails, User, _is_19_or_older, create_app, db
 
 
 @pytest.fixture()
@@ -24,6 +27,42 @@ def app(tmp_path):
 @pytest.fixture()
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture()
+def make_user():
+    """Build isolated synthetic member records for authorization tests."""
+    sequence = count(1)
+
+    def factory(
+        *,
+        status="active",
+        is_admin=False,
+        birth_date=date(1990, 1, 1),
+        membership_type="adult",
+    ):
+        number = next(sequence)
+        user = User(
+            full_name=f"Synthetic Member {number}",
+            email=f"synthetic-{number}@example.test",
+            username=f"synthetic-{number}",
+            status=status,
+            is_admin=is_admin,
+        )
+        user.set_password("Synthetic-Password-1")
+        user.membership_details = MembershipDetails(
+            first_name="Synthetic",
+            last_name=f"Member {number}",
+            community="Port McNeill",
+            date_of_birth=birth_date,
+            age_19_or_older=_is_19_or_older(birth_date),
+            mailing_address="1 Example Street",
+            membership_type=membership_type,
+            activities=[],
+        )
+        return user
+
+    return factory
 
 
 def set_csrf(client):

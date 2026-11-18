@@ -1,0 +1,45 @@
+{% extends "base.html" %} {% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p class="eyebrow">Membership</p>
+    <h1>Renew membership</h1>
+    {% if renewal_pending %}
+    <p>
+      Your renewal request is awaiting administrator review. Any required dues
+      must be recorded before the renewal can be approved. Your account remains
+      inactive until approval.
+    </p>
+    <p>
+      Payment status:
+      <strong>{{ latest_term.payment_status|capitalize }}</strong>
+    </p>
+    {% else %}
+    <p>
+      Your membership is inactive. Submit a renewal request below. You will not
+      regain member access until required dues are recorded and an administrator
+      approves the request.
+    </p>
+    {% if latest_term.membership_type == 'adult' %}
+    <p>
+      Adult annual dues are $10. Send payment by Interac e-Transfer to
+      <a href="mailto:membership@accessni.ca">membership@accessni.ca</a>.
+      Administrators will verify and record payment before approval.
+    </p>
+    {% else %}
+    <p>Youth membership is free; administrator approval is still required.</p>
+    {% endif %}
+    <form method="post">
+      <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ session.get('csrf_token', '') }}"
+      />
+      <button class="button button--primary" type="submit">
+        Submit renewal request
+      </button>
+    </form>
+    {% endif %}
+    <p><a href="{{ url_for('member_profile') }}">Manage or delete your community profile</a>. Profile privacy controls remain available while membership is inactive.</p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import form_tokens, listing_details with context %}
+{% set title = details.title or 'Activity registration' %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p><a href="{{ url_for('.my_registrations') }}">My registrations</a></p>
+    <h1>{{ title }}</h1>
+    {% if details %}{{ listing_details(details, location_label) }}{% endif %}
+
+    {% if registration %}
+    <h2>Your registration</h2>
+    <p><strong>{{ registration_labels[registration.status] }}</strong></p>
+    {% if registration.renewal_until %}
+    <p>Renew your membership by {{ deadline_text(registration.renewal_until) }} to keep your registration.</p>
+    {% endif %}
+    {% if registration.status == 'offered' and registration.offer_expires_at %}
+    <p>Offer deadline {{ deadline_text(registration.offer_expires_at) }}</p>
+    {% endif %}
+    {% endif %}
+
+    {% if not service.is_live %}
+    <p>Registration is currently unavailable for this activity.</p>
+    {% elif can_accept %}
+    <form method="post">
+      {{ form_tokens() }}
+      <button class="button button--primary" type="submit" name="action" value="accept">Accept my place</button>
+    </form>
+    {% elif service.signup_open and (not registration or registration.status in ['cancelled', 'expired']) %}
+      {% if eligible %}
+      <form method="post">
+        {{ form_tokens() }}
+        <label for="display_name">Name for the organizer</label>
+        <input id="display_name" name="display_name" maxlength="80" value="{{ registration.display_name if registration else suggested_name }}" required />
+        <p class="form-hint">Activity organizers use this name on the roster.</p>
+        <button class="button button--primary" type="submit" name="action" value="register">
+          {% if service.revision.organizer_details.registration_mode == 'organizer_approval' %}
+          Request registration
+          {% elif available > 0 %}Register{% else %}Join the waitlist{% endif %}
+        </button>
+      </form>
+      {% else %}<p>An eligible active membership is required to register.</p>{% endif %}
+    {% elif not service.signup_open and (not registration or registration.status in ['cancelled', 'expired']) %}
+    <p>Registration is closed.</p>
+    {% endif %}
+
+    {% if private_details %}
+    <h2>Information for confirmed participants</h2>
+    <dl>
+      {% for key, (label, _) in organizer_fields.items() if private_details[key] %}
+      <dt>{{ label }}</dt><dd>{{ private_details[key] }}</dd>
+      {% endfor %}
+    </dl>
+    {% endif %}
+    {% if can_cancel %}
+    <form method="post">
+      {{ form_tokens() }}
+      <button class="button button--secondary" type="submit" name="action" value="cancel">{{ 'Decline offer' if registration.status == 'offered' else 'Cancel my registration' }}</button>
+    </form>
+    {% elif registration and registration.status == 'confirmed' and service.start and service.now < service.start %}
+    <p>The cancellation deadline has passed. Contact the Society if your plans have changed.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

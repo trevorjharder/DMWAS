@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import pagination %}
+{% block content %}
+<div class="hub-dashboard">
+  <p><a href="{{ url_for('.my_registrations') }}">My registrations</a></p>
+  <h1>Activity notices</h1>
+  {% if rows %}
+  <div class="hub-grid">
+    {% for notice, details in rows %}
+    <article class="hub-card">
+      <h2>
+        <a href="{{ url_for('.roster' if notice.event == 'organizer_request' else '.enroll', activity_id=notice.activity_id) }}">
+          {{ details.title if details else 'Activity' }}
+        </a>
+      </h2>
+      <p>{{ notice_text[notice.event] }}</p>
+      <p><time datetime="{{ notice.created_at.isoformat() }}">{{ deadline_text(notice.created_at) }}</time></p>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}<p>You have no activity notices.</p>{% endif %}
+  {{ pagination(page, has_next, request.endpoint, {}) }}
+</div>
+{% endblock %}

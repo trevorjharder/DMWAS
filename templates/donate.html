@@ -1,0 +1,22 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Support local access</p>
+  <h1>Donate to the Society</h1>
+  <p>
+    Your support helps the District of Mount Waddington Access Society advance
+    outdoor access, education, and stewardship in our region.
+  </p>
+</section>
+<section class="contact-card" aria-labelledby="etransfer-heading">
+  <h2 id="etransfer-heading">Donate by e-Transfer</h2>
+  <p>
+    Send an Interac e-Transfer to
+    <a href="mailto:donations@accessni.ca">donations@accessni.ca</a>.
+  </p>
+  <h2>Donate equipment</h2>
+  <p>
+    If you would like to donate equipment, please
+    <a href="{{ url_for('contact') }}">contact us</a> to discuss your donation.
+  </p>
+</section>
+{% endblock %}

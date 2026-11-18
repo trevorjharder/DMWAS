@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import cohost_picker, form_tokens with context %}
+{% set title = 'Edit activity draft' if activity else 'New activity draft' %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p><a href="{{ url_for('.member_detail', activity_id=activity.id) if activity else url_for('.member_list') }}">Back to {{ 'activity' if activity else 'my activities' }}</a></p>
+    <h1>{{ title }}</h1>
+    {% if activity and activity.status == 'approved' %}
+    <p>Saving a change removes the public listing until the new version is approved.</p>
+    {% endif %}
+    {% if errors %}
+    <div class="flash flash--error" role="alert">
+      <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    <form method="post">
+      {{ form_tokens(activity) }}
+      {% if not activity and can_review %}
+      <label for="classification">Organizer classification</label>
+      <select id="classification" name="classification">
+        {% if can_access_adult_hub %}
+        <option value="member" {% if request.form.get('classification') == 'member' %}selected{% endif %}>Member-organized</option>
+        {% endif %}
+        <option value="official" {% if request.form.get('classification') == 'official' %}selected{% endif %}>Official Society activity</option>
+      </select>
+      {% endif %}
+      <fieldset class="form-options">
+        <legend>Public listing</legend>
+        <p class="form-hint">Keep names, contact details, precise meeting locations and meeting links out of these public fields.</p>
+        <label for="title">Activity title</label>
+        <input id="title" name="title" maxlength="{{ public_fields.title[1] }}" value="{{ public.get('title', '') }}" />
+        <label for="summary">Public summary</label>
+        <textarea id="summary" name="summary" maxlength="{{ public_fields.summary[1] }}" rows="4">{{ public.get('summary', '') }}</textarea>
+        <label for="category">Category</label>
+        <select id="category" name="category">
+          <option value="">Choose a category</option>
+          {% for item in categories %}<option {% if public.get('category') == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+        </select>
+        <label for="location">Location</label>
+        <input id="location" name="location" maxlength="{{ public_fields.location[1] }}" value="{{ location_label(public.get('location', '')) }}" aria-describedby="location-help" />
+        <p class="form-hint" id="location-help">Enter the general area, or enter Online for a virtual activity.</p>
+        <p class="form-hint" id="activity-times">Activity dates and times use {{ time_zone_label }}.</p>
+        <label for="starts">Starts</label>
+        <input id="starts" name="starts" type="datetime-local" value="{{ public.get('starts', '') }}" aria-describedby="activity-times" />
+        <label for="ends">Ends</label>
+        <input id="ends" name="ends" type="datetime-local" value="{{ public.get('ends', '') }}" aria-describedby="activity-times" />
+      </fieldset>
+      <fieldset class="form-options">
+        <legend>Private organizer and reviewer details</legend>
+        <label for="capacity">Capacity</label>
+        <input id="capacity" name="capacity" type="number" min="1" max="1000" value="{{ organizer.get('capacity', '') }}" />
+        <label for="registration_mode">Registration mode</label>
+        <select id="registration_mode" name="registration_mode">
+          <option value="">Choose a mode</option>
+          {% for key, label in modes.items() %}
+          <option value="{{ key }}" {% if organizer.get('registration_mode') == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% set hints = {
+          'meeting_details': 'Describe the meeting point for an in-person activity or supply the online meeting link.',
+          'accessibility': 'Describe access and known barriers. Say which details still need confirmation.',
+          'safety': 'Required for in-person activities.',
+        } %}
+        {% for key, (label, maximum) in organizer_fields.items() %}
+        <label for="{{ key }}">{{ label }}</label>
+        {% if key in hints %}<p class="form-hint" id="{{ key }}-hint">{{ hints[key] }}</p>{% endif %}
+        <textarea id="{{ key }}" name="{{ key }}" maxlength="{{ maximum }}" rows="3" {% if key in hints %}aria-describedby="{{ key }}-hint"{% endif %}>{{ organizer.get(key, '') }}</textarea>
+        {% endfor %}
+      </fieldset>
+      {{ cohost_picker(cohost_choices, selected_cohost) }}
+      <button class="button button--secondary" type="submit" name="draft_action" value="save">Save draft</button>
+      <button class="button button--primary" type="submit" name="draft_action" value="submit">Submit draft</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

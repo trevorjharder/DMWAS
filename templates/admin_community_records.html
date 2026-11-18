@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% macro record_fields(record, prefix) %}
+{% set selected_members = record.participants|map(attribute='user_id')|list if record else [] %}
+<fieldset class="record-member-picker" aria-describedby="{{ prefix }}-members-help" data-member-picker>
+  <legend>Members</legend>
+  <p id="{{ prefix }}-members-help" class="form-hint">Select at least one member who took part.</p>
+  <div data-member-search-controls hidden>
+    <label for="{{ prefix }}-member-search">Search members by name</label>
+    <input type="search" id="{{ prefix }}-member-search" autocomplete="off" aria-controls="{{ prefix }}-members" />
+    <p class="form-hint" role="status"></p>
+  </div>
+  <div class="record-member-picker__options" id="{{ prefix }}-members" data-member-options>
+    {% for member in members %}
+    <div>
+      <label class="record-member-picker__option">
+        <input type="checkbox" name="user_ids" value="{{ member.id }}" {% if member.id in selected_members %}checked{% endif %} />
+        <span>{{ member.full_name }} · {{ member.member_number }}</span>
+      </label>
+    </div>
+    {% endfor %}
+  </div>
+</fieldset>
+<label for="{{ prefix }}-title">Shareable summary</label><input id="{{ prefix }}-title" name="title" maxlength="160" required value="{{ record.title if record else '' }}" />
+<p class="form-hint">Do not include private locations or other participants' details.</p>
+<label for="{{ prefix }}-kind">Record type</label><select id="{{ prefix }}-kind" name="record_type"><option value="activity">Activity</option><option value="volunteer" {% if record and record.record_type == 'volunteer' %}selected{% endif %}>Volunteer contribution</option></select>
+<label for="{{ prefix }}-date">Completion date</label><input id="{{ prefix }}-date" type="date" name="occurred_on" required value="{{ record.occurred_on if record else '' }}" />
+<label for="{{ prefix }}-minutes">Volunteer minutes per member (volunteer records only)</label><input id="{{ prefix }}-minutes" type="number" name="volunteer_minutes" min="1" max="600000" value="{{ record.volunteer_minutes if record and record.volunteer_minutes else '' }}" />
+<label class="check-label"><input type="checkbox" name="shareable" value="yes" {% if record and record.shareable and record.verified and not record.sensitive %}checked{% endif %} />Allow members to share this activity</label>
+{% endmacro %}
+{% block content %}
+<section class="page-heading"><p class="eyebrow">Administration</p><h1>Verified community records</h1><p>Verify completed activities and volunteer contributions. Saving verifies the record. Choose whether members may share it; each member selects their own profile highlights.</p></section>
+<section class="directory-section">
+<details><summary>Add a verified record</summary><form method="post" class="verified-record-form">
+<input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+{{ record_fields(none, 'new') }}<button class="button button--primary">Save record</button></form></details>
+{% for record in records %}<article class="community-profile-card"><h2>{{ record.title }}</h2><p>{{ record.participants|length }} member(s)</p><ul>{% for participant in record.participants %}<li>{{ participant.user.member_number }} · {{ participant.user.full_name }}</li>{% endfor %}</ul>
+<details><summary>Edit verification and sharing</summary><form method="post" class="verified-record-form">
+<input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" /><input type="hidden" name="record_id" value="{{ record.id }}" />
+{{ record_fields(record, record.id|string) }}<button class="button button--primary">Save changes</button></form></details></article>
+{% else %}<div class="empty-state"><h2>No verified records yet</h2><p>Add a completed activity or volunteer contribution above.</p></div>{% endfor %}
+<nav class="directory-pagination" aria-label="Verified record pages">{% if page > 1 %}<a href="{{ url_for('admin_community_records', page=page-1) }}">Previous page</a>{% endif %}{% if has_next %}<a href="{{ url_for('admin_community_records', page=page+1) }}">Next page</a>{% endif %}</nav>
+</section>
+<script src="{{ url_for('static', filename='record_member_picker.js') }}" defer></script>
+{% endblock %}

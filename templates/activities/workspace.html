@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import cohost_picker, form_tokens, listing_details, organizer_details, pagination with context %}
+{% set title = revision.public_details.title or 'Untitled activity' %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p><a href="{{ url_for('.admin_list' if reviewing else '.member_list') }}">{{ 'Activity review queue' if reviewing else 'My activities' }}</a></p>
+    <h1>{{ title }}</h1>
+    {% if not reviewing and config.ACTIVITY_REGISTRATION_ENABLED and revision.starts_at %}
+    <a class="button button--secondary" href="{{ url_for('registrations.roster', activity_id=activity.id) }}">Manage roster</a>
+    {% endif %}
+    <p>{{ 'Society activity' if activity.classification == 'official' else 'Member-organized activity' }} · {{ statuses[activity.status] }} · Version {{ revision.number }}</p>
+    {% if reviewing %}
+      <p>Primary organizer {{ organizer_user.member_number if organizer_user else 'Removed' }}{% if organizer_user %} · {{ organizer_user.full_name }}{% endif %}</p>
+      {% if revision.number != activity.revision_number %}
+      <p><a href="{{ url_for('.admin_detail', activity_id=activity.id) }}">Return to current version</a></p>
+      {% endif %}
+      {% if activity.classification == 'member' and not publication_enabled %}
+      <p>Public member-organized listings are disabled pending insurer and policy review.</p>
+      {% endif %}
+    {% elif latest_note %}
+      <h2>Last reviewer note</h2>
+      <p>{{ latest_note.note }}</p>
+    {% endif %}
+
+    <h2>Public listing preview</h2>
+    {{ listing_details(revision.public_details, location_label) }}
+    <h2>Private organizer details</h2>
+    {{ organizer_details(revision.organizer_details, organizer_fields, modes) }}
+
+    {% if not reviewing %}
+      {% if activity.status != 'submitted' %}
+      <a class="button button--secondary" href="{{ url_for('.edit_activity', activity_id=activity.id) }}">Edit draft</a>
+      {% endif %}
+      {% if activity.status in ['draft', 'unpublished', 'submitted'] %}
+      {% set action = 'withdraw' if activity.status == 'submitted' else 'submit' %}
+      <form method="post" action="{{ url_for('.member_transition', activity_id=activity.id, action=action) }}">
+        {{ form_tokens(activity) }}
+        <button class="button button--primary" type="submit">{{ 'Withdraw submission' if action == 'withdraw' else 'Submit for review' }}</button>
+      </form>
+      {% endif %}
+    {% elif revision.number == activity.revision_number and activity.status in ['submitted', 'approved'] %}
+      <h2>Review decision</h2>
+      <form method="post">
+        {{ form_tokens(activity) }}
+        {% if activity.status == 'submitted' %}
+        <label class="check-label"><input type="checkbox" name="confirm_public" value="yes" />I reviewed the title, summary and location for personal details, precise locations and private links.</label>
+        {% endif %}
+        <label for="note">Reviewer note</label>
+        <p class="form-hint" id="note-hint">The primary organizer can read this note. A note is required for a change request, rejection or unpublishing.</p>
+        <textarea id="note" name="note" maxlength="1000" rows="3" aria-describedby="note-hint"></textarea>
+        {% if activity.status == 'submitted' %}
+          {% if activity.classification == 'official' or activity.organizer_id != current_user.id %}
+          <button class="button button--primary" type="submit" formaction="{{ url_for('.review_transition', activity_id=activity.id, action='approve') }}">Approve activity</button>
+          {% else %}<p>Another administrator must approve this member proposal.</p>{% endif %}
+          <button class="button button--secondary" type="submit" formaction="{{ url_for('.review_transition', activity_id=activity.id, action='request_changes') }}">Request changes</button>
+          <button class="button button--secondary" type="submit" formaction="{{ url_for('.review_transition', activity_id=activity.id, action='reject') }}">Reject activity</button>
+        {% else %}
+          <button class="button button--secondary" type="submit" formaction="{{ url_for('.review_transition', activity_id=activity.id, action='unpublish') }}">Unpublish activity</button>
+        {% endif %}
+      </form>
+    {% endif %}
+
+    {% if revision.number == activity.revision_number %}
+    <h2>Co-organizers</h2>
+    {% for invitation, member, display_name in coorganizers %}
+    <div class="form-options">
+      <p>{{ member.full_name if reviewing else display_name or 'Co-host' }} · {{ invitation.status|capitalize }}</p>
+      {% set transition_endpoint = '.review_coorganizer' if reviewing else '.member_coorganizer_transition' %}
+      {% if invitation.status in ['invited', 'accepted', 'approved'] %}
+      <form method="post" action="{{ url_for(transition_endpoint, activity_id=activity.id, user_id=member.id, action='revoke') }}">
+        {{ form_tokens(activity) }}
+        {% if reviewing and invitation.status == 'accepted' %}
+        <button class="button button--primary" type="submit" formaction="{{ url_for(transition_endpoint, activity_id=activity.id, user_id=member.id, action='approve') }}">Approve co-organizer</button>
+        {% endif %}
+        <button class="button button--secondary" type="submit">Revoke access or invitation</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}<p>No co-organizers have been invited.</p>{% endfor %}
+    {% if not reviewing and cohost_choices %}
+    <form method="post" action="{{ url_for('.invite_coorganizer', activity_id=activity.id) }}">
+      {{ form_tokens(activity) }}
+      {{ cohost_picker(cohost_choices, required=true) }}
+      <button class="button button--secondary" type="submit">Invite co-host</button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    {% if reviewing %}
+    <h2>Activity history</h2>
+    <ol>
+      {% for event in rows %}
+      <li>
+        {{ event.created_at.strftime('%Y-%m-%d %H:%M') }} UTC ·
+        {{ event.action|replace('_', ' ')|capitalize }} · {{ event.new_status|replace('_', ' ') }} ·
+        <a href="{{ url_for('.admin_detail', activity_id=activity.id, revision=event.revision_number) }}">Version {{ event.revision_number }}</a>
+        {% if event.actor_id %} · Actor {{ 'DMWAS-%06d'|format(event.actor_id) }}{% endif %}
+        {% if event.subject_id %} · Co-organizer {{ 'DMWAS-%06d'|format(event.subject_id) }}{% endif %}
+        {% if event.note %}<p>{{ event.note }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {{ pagination(page, has_next, '.admin_detail', {'activity_id': activity.id, 'revision': revision.number}) }}
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
