@@ -45,9 +45,10 @@
         >
         <a href="{{ url_for('contact') }}">Contact</a>
         <a href="{{ url_for('donate') }}">Donate</a>
-        {% if current_user and session.get('renewal_only') and
-        current_user.status in ['inactive', 'expired'] %}
-        <a href="{{ url_for('membership_renewal') }}">Renew membership</a>
+        {% if current_user and (session.get('renewal_only') or can_read_messages)
+        and current_user.status in ['inactive', 'expired'] %}
+        {% if can_request_renewal %}<a href="{{ url_for('membership_renewal') }}">Renew membership</a>{% endif %}
+        {% if can_read_messages %}<a href="{{ url_for('messaging.inbox') }}">Messages</a>{% endif %}
         <form class="nav-form" method="post" action="{{ url_for('logout') }}">
           <input
             type="hidden"
@@ -151,6 +152,9 @@
         {% if config.ACTIVITY_REGISTRATION_ENABLED and can_use_activity_registration %}
         <a href="{{ url_for('registrations.my_registrations') }}" {% if endpoint in ['registrations.my_registrations', 'registrations.notices', 'registrations.enroll'] %}aria-current="page"{% endif %}>My registrations</a>
         {% endif %}
+        {% if can_read_messages %}
+        <a href="{{ url_for('messaging.inbox') }}" {% if request.blueprint == 'messaging' and request.path.startswith('/member/') %}aria-current="page"{% endif %}>Messages</a>
+        {% endif %}
         {% if current_user.is_admin %}
         <a
           href="{{ url_for('activities.admin_list') }}"
@@ -207,6 +211,10 @@
           %}
           >Profile review</a
         >
+        <a href="{{ url_for('admin_community_records') }}" {% if endpoint == 'admin_community_records' %}aria-current="page"{% endif %}>Verified records</a>
+        {% if can_review_message_reports %}
+        <a href="{{ url_for('messaging.reports') }}" {% if endpoint in ['messaging.reports', 'messaging.review_report'] %}aria-current="page"{% endif %}>Message reports</a>
+        {% endif %}
         {% endif %}
       </div>
     </nav>

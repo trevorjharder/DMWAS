@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% from "messaging/_parts.html" import token with context %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card">
+    <p><a href="{{ url_for('.inbox') }}">Messages</a></p>
+    <h1>Email reminders</h1>
+    <p>Reminders give you a count of unread messages. Open the Hub to read them.</p>
+    <form method="post">
+      {{ token() }}
+      <label class="check-label"><input type="checkbox" name="digest" value="yes" {% if digest_enabled %}checked{% endif %} />Email me unread-message reminders</label>
+      <button type="submit" class="button button--primary">Save preferences</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

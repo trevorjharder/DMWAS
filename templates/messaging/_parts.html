@@ -1,0 +1,17 @@
+{% macro token() %}<input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />{% endmacro %}
+
+{% macro pages(page, has_next, endpoint, params={}) %}
+{% if page > 1 or has_next %}
+<nav class="directory-pagination" aria-label="Pages">
+  {% if page > 1 %}<a href="{{ url_for(endpoint, page=page-1, **params) }}">Previous page</a>{% endif %}
+  {% if has_next %}<a href="{{ url_for(endpoint, page=page+1, **params) }}">Next page</a>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro connection_button(pair_id, action, label) %}
+<form method="post" action="{{ url_for('messaging.change_connection', pair_id=pair_id, action=action) }}">
+  {{ token() }}
+  <button type="submit" class="button button--secondary">{{ label }}</button>
+</form>
+{% endmacro %}

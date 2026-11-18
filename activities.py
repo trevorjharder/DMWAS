@@ -16,6 +16,7 @@ from activity_models import (
     Activity, ActivityActionWindow, ActivityAudit, ActivityCoorganizer, ActivityRevision,
 )
 from extensions import db
+from messaging_service import blocked_with
 from permissions import Capability, adult_birth_date_cutoff, has_capability
 from rate_limits import account_quota_retry_after
 from registration_models import ActivityRegistration
@@ -146,7 +147,8 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
         query = db.session.query(
             CommunityProfile.user_id, CommunityProfile.display_name,
             case((CommunityProfile.show_community.is_(True), CommunityProfile.general_community)),
-        ).filter(*visible_cohosts(), CommunityProfile.user_id != g.current_user.id)
+        ).filter(*visible_cohosts(), CommunityProfile.user_id != g.current_user.id,
+                 ~blocked_with(g.current_user.id, CommunityProfile.user_id))
         if activity:
             already_invited = db.select(ActivityCoorganizer.user_id).where(
                 ActivityCoorganizer.activity_id == activity.id)
@@ -171,7 +173,8 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
         if (not cohost_id or not 0 < cohost_id <= 2_147_483_647
                 or cohost_id == g.current_user.id
                 or not CommunityProfile.query.filter(
-                    *visible_cohosts(), CommunityProfile.user_id == cohost_id).with_entities(
+                    *visible_cohosts(), CommunityProfile.user_id == cohost_id,
+                    ~blocked_with(g.current_user.id, CommunityProfile.user_id)).with_entities(
                         CommunityProfile.user_id).first()):
             return None, "Choose an available co-host from the list."
         return cohost_id, None

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "messaging/_parts.html" import token, connection_button with context %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p><a href="{{ url_for('.inbox') }}">Messages</a></p>
+    <h1>{{ title }}</h1>
+    {% if older %}<p><a href="{{ url_for('.thread', pair_id=pair.id, before=older) }}">Older messages</a></p>{% endif %}
+    {% if request.args.get('before') %}<p><a href="{{ url_for('.thread', pair_id=pair.id) }}">Latest messages</a></p>{% endif %}
+    <ol class="message-list" aria-label="Conversation messages">
+      {% for item in items %}
+      <li class="form-options">
+        <p><strong>{{ 'You' if item.sent_by_low == low else title }}</strong>
+          <time datetime="{{ item.created_at.isoformat() }}">{{ item.created_at.strftime('%b %d, %Y %H:%M') }} UTC</time>
+        </p>
+        <p class="message-body">{{ item.body }}</p>
+      </li>
+      {% else %}<li>No messages in this view.</li>{% endfor %}
+    </ol>
+    {% if read_through %}
+    <form method="post" action="{{ url_for('.mark_read', pair_id=pair.id) }}">
+      {{ token() }}
+      <input type="hidden" name="through" value="{{ read_through }}" />
+      <button class="button button--secondary" type="submit">Mark as read</button>
+    </form>
+    {% endif %}
+    {% if can_send %}
+    <form method="post" action="{{ url_for('.send', pair_id=pair.id) }}">
+      {{ token() }}
+      <label for="body">Message</label>
+      <textarea id="body" name="body" rows="4" maxlength="2000" required></textarea>
+      <button class="button button--primary" type="submit">Send message</button>
+    </form>
+    {% else %}<p>This conversation is read-only.</p>{% endif %}
+    <div class="message-actions">
+      <a href="{{ url_for('.report', pair_id=pair.id, before=request.args.get('before')) }}">Report conversation</a>
+      {% if blocked_here %}
+      {{ connection_button(pair.id, 'unblock', 'Unblock member') }}
+      {% elif pair.peer_id(current_user.id) %}
+      {{ connection_button(pair.id, 'block', 'Block member') }}
+      {% endif %}
+      {% if can_send %}{{ connection_button(pair.id, 'disconnect', 'Disconnect') }}{% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

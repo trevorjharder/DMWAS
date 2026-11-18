@@ -102,17 +102,13 @@
       <article class="hub-card">
         <div class="hub-card__topline">
           <h3>Member directory</h3>
-          <span class="hub-status hub-status--paused"
-            >Privacy controls in progress</span
-          >
         </div>
         <p>
-          Member discovery is paused until profile privacy and opt-in controls
-          are available.
+          Find members who have chosen to share a directory profile.
         </p>
         {% if can_access_adult_hub %}
         <a class="hub-card__link" href="{{ url_for('member_search') }}">
-          View directory status <span aria-hidden="true">→</span>
+          Browse directory <span aria-hidden="true">→</span>
         </a>
         {% else %}
         <p class="hub-card__note">
@@ -139,15 +135,15 @@
         {% endif %}
       </article>
 
-      <article class="hub-card hub-card--upcoming">
+      {% if can_read_messages %}
+      <article class="hub-card">
         <div class="hub-card__topline">
           <h3>Connections and messages</h3>
-          <span class="hub-status">Coming later</span>
         </div>
-        <p>
-          Member networking will be introduced with privacy and safety controls.
-        </p>
+        <p><a class="hub-card__link" href="{{ url_for('messaging.connections') }}">Manage connections</a></p>
+        <a class="hub-card__link" href="{{ url_for('messaging.inbox') }}">Open messages</a>
       </article>
+      {% endif %}
     </div>
   </section>
 
