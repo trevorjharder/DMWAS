@@ -278,6 +278,8 @@ db.Index("ix_community_profile_directory", CommunityProfile.status,
 class VerifiedCommunityRecord(db.Model):
     """Administrator-verified summary; separate from future activity rosters."""
     id = db.Column(db.Integer, primary_key=True)
+    # Retained as a primary participant for compatibility with Phase 05 data.
+    # Sharing eligibility is determined by participants, not this pointer.
     user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
     title = db.Column(db.String(160), nullable=False)
     record_type = db.Column(db.String(20), nullable=False)
@@ -290,6 +292,20 @@ class VerifiedCommunityRecord(db.Model):
     verified_at = db.Column(db.DateTime(timezone=True), nullable=False,
                             default=lambda: datetime.now(timezone.utc))
     user = db.relationship("User", foreign_keys=[user_id])
+    participants = db.relationship("VerifiedCommunityRecordParticipant", cascade="all, delete-orphan",
+                                   back_populates="record", order_by="VerifiedCommunityRecordParticipant.user_id")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if kwargs.get("user_id") is not None and "participants" not in kwargs:
+            self.participants = [VerifiedCommunityRecordParticipant(user_id=kwargs["user_id"])]
+
+
+class VerifiedCommunityRecordParticipant(db.Model):
+    record_id = db.Column(db.Integer, db.ForeignKey("verified_community_record.id", ondelete="CASCADE"), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), primary_key=True, index=True)
+    record = db.relationship("VerifiedCommunityRecord", back_populates="participants")
+    user = db.relationship("User")
 
 
 class CommunityProfileHighlight(db.Model):
@@ -308,13 +324,14 @@ class VerifiedCommunityRecordAudit(db.Model):
 
 
 def highlight_options(user_id):
-    return VerifiedCommunityRecord.query.filter_by(user_id=user_id, verified=True,
-        shareable=True, sensitive=False).order_by(VerifiedCommunityRecord.occurred_on.desc(),
+    return VerifiedCommunityRecord.query.filter_by(verified=True,
+        shareable=True, sensitive=False).filter(VerifiedCommunityRecord.participants.any(user_id=user_id)).order_by(VerifiedCommunityRecord.occurred_on.desc(),
                                                  VerifiedCommunityRecord.id).all()
 
 
 def profile_query_options(query):
-    return query.options(selectinload(CommunityProfile.highlights).selectinload(CommunityProfileHighlight.record))
+    return query.options(selectinload(CommunityProfile.highlights).selectinload(
+        CommunityProfileHighlight.record).selectinload(VerifiedCommunityRecord.participants))
 
 
 class DirectoryAccessWindow(db.Model):
@@ -355,7 +372,8 @@ def community_profile_fields(profile: CommunityProfile) -> dict[str, object]:
     if profile.show_photo and profile.photo_present:
         fields["photo_url"] = url_for("community_profile_photo", user_id=profile.user_id)
     if profile.show_highlights:
-        records = [item.record for item in profile.highlights if item.record.user_id == profile.user_id
+        records = [item.record for item in profile.highlights if any(
+                   participant.user_id == profile.user_id for participant in item.record.participants)
                    and item.record.verified and item.record.shareable and not item.record.sensitive]
         fields["highlights"] = [{"title": record.title, "type": record.record_type,
                                   "date": record.occurred_on.isoformat(),
@@ -1670,10 +1688,21 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         )
         delete_community_profile(member.id)
         DirectoryAccessWindow.query.filter_by(user_id=member.id).delete(synchronize_session=False)
-        record_ids = select(VerifiedCommunityRecord.id).where(VerifiedCommunityRecord.user_id == member.id)
-        VerifiedCommunityRecordAudit.query.filter(VerifiedCommunityRecordAudit.record_id.in_(record_ids)).delete(synchronize_session=False)
-        CommunityProfileHighlight.query.filter(CommunityProfileHighlight.record_id.in_(record_ids)).delete(synchronize_session=False)
-        VerifiedCommunityRecord.query.filter_by(user_id=member.id).delete(synchronize_session=False)
+        shared_records = VerifiedCommunityRecord.query.options(selectinload(
+            VerifiedCommunityRecord.participants)).filter(or_(
+                VerifiedCommunityRecord.user_id == member.id,
+                VerifiedCommunityRecord.participants.any(user_id=member.id))).all()
+        for record in shared_records:
+            remaining = [p for p in record.participants if p.user_id != member.id]
+            if remaining:
+                record.participants = remaining
+                if record.user_id == member.id:
+                    record.user_id = min(p.user_id for p in remaining)
+            else:
+                VerifiedCommunityRecordAudit.query.filter_by(record_id=record.id).delete(synchronize_session=False)
+                CommunityProfileHighlight.query.filter_by(record_id=record.id).delete(synchronize_session=False)
+                db.session.delete(record)
+        db.session.flush()
         PasswordResetCode.query.filter_by(user_id=member.id).delete(
             synchronize_session=False
         )
@@ -1706,7 +1735,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     def admin_community_records():
         if request.method == "POST":
             try:
-                member_id = int(request.form.get("user_id", ""))
+                explicit_members = "user_ids" in request.form
+                member_ids = set(int(value) for value in request.form.getlist(
+                    "user_ids" if explicit_members else "user_id"))
                 record_id = request.form.get("record_id", type=int)
                 title = request.form.get("title", "").strip()
                 kind = request.form.get("record_type", "")
@@ -1716,7 +1747,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     raise ValueError()
                 if occurred > date.today() or (minutes is not None and not 0 < minutes <= 600000):
                     raise ValueError()
-                if db.session.get(User, member_id) is None:
+                if not member_ids or len(member_ids) > 500 or User.query.filter(User.id.in_(member_ids)).count() != len(member_ids):
                     raise ValueError()
             except ValueError:
                 abort(400, description="Enter a valid member, summary, past date and activity type. Volunteer records require positive whole minutes.")
@@ -1725,11 +1756,26 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             record = db.session.get(VerifiedCommunityRecord, record_id) if record_id else None
             if record_id and record is None:
                 abort(404)
-            if record and record.user_id != member_id:
-                abort(400, description="Record ownership cannot be changed.")
+            if record and not explicit_members:
+                if member_ids != {record.user_id}:
+                    abort(400, description="Use the member list to change record participants.")
+                member_ids = {participant.user_id for participant in record.participants}
+            previous_members = {participant.user_id for participant in record.participants} if record else set()
             if record is None:
-                record = VerifiedCommunityRecord(user_id=member_id)
+                record = VerifiedCommunityRecord(user_id=min(member_ids))
                 db.session.add(record)
+            record.user_id = min(member_ids)
+            for participant in list(record.participants):
+                if participant.user_id not in member_ids:
+                    record.participants.remove(participant)
+            existing_members = {participant.user_id for participant in record.participants}
+            for member_id in member_ids - existing_members:
+                record.participants.append(VerifiedCommunityRecordParticipant(user_id=member_id))
+            if previous_members - member_ids:
+                removed_profiles = select(CommunityProfile.id).where(
+                    CommunityProfile.user_id.in_(previous_members - member_ids))
+                CommunityProfileHighlight.query.filter_by(record_id=record.id).filter(
+                    CommunityProfileHighlight.profile_id.in_(removed_profiles)).delete(synchronize_session=False)
             record.title, record.record_type = title, kind
             record.occurred_on, record.volunteer_minutes = occurred, minutes
             record.verified = request.form.get("verified") == "yes"
@@ -1740,6 +1786,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             db.session.flush()
             db.session.add(VerifiedCommunityRecordAudit(record_id=record.id, actor_id=g.current_user.id,
                 snapshot={"title": title, "type": kind, "date": occurred.isoformat(),
+                          "member_ids": sorted(member_ids), "previous_member_ids": sorted(previous_members),
                           "volunteer_minutes": minutes, "verified": record.verified,
                           "shareable": record.shareable, "sensitive": record.sensitive}))
             db.session.commit()
@@ -1748,7 +1795,8 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         page = request.args.get("page", 1, type=int)
         if page < 1 or page > 10000:
             abort(400)
-        records = VerifiedCommunityRecord.query.options(selectinload(VerifiedCommunityRecord.user)).order_by(
+        records = VerifiedCommunityRecord.query.options(selectinload(VerifiedCommunityRecord.participants).selectinload(
+            VerifiedCommunityRecordParticipant.user)).order_by(
             VerifiedCommunityRecord.id.desc()).offset((page - 1) * 20).limit(21).all()
         members = User.query.order_by(User.full_name, User.id).all()
         return render_template("admin_community_records.html", title="Verified community records",

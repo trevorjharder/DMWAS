@@ -37,12 +37,14 @@ implement Phase 06 activity proposals or Phase 07 registration/attendance.
   an owner, safe summary, completion date, activity/volunteer type, optional whole
   volunteer minutes, explicit verification, shareable and sensitive flags.
   Creation and every edit produce an audit snapshot with administrator and time.
-  Record ownership cannot be changed. Future dates and invalid minutes are rejected.
+  Administrators can select multiple participants for one record and edit that
+  member list later. Volunteer minutes apply to each selected member. Future dates
+  and invalid minutes are rejected.
 - Records start private unless an administrator explicitly marks them shareable.
   A sensitive flag always prevents sharing, including when shareable is checked.
   Administrators must classify the underlying activity, not just its summary.
 - Members may select up to ten of **their own** verified, shareable, non-sensitive
-  records on their existing profile form. A separate highlight visibility control
+  records they participated in on their existing profile form. A separate highlight visibility control
   is off by default. Selection alone does not publish anything; profile opt-in
   and every existing field/eligibility rule still apply.
 - Each render/API response rechecks ownership and record verification/privacy.
@@ -50,7 +52,9 @@ implement Phase 06 activity proposals or Phase 07 registration/attendance.
   immediately. Stale or deliberately forged associations cannot leak another
   member's records. Profile deletion removes selection links; the verified source
   and its administrative audit remain. Account deletion removes owned sources,
-  links, audit snapshots and quota rows with the rest of the account data.
+  links and quota rows with the rest of the account data. Shared records and their
+  audit history remain available for the other participants; records with no
+  remaining participant are removed.
 
 ## Files
 
@@ -165,3 +169,37 @@ web Start Command was confirmed unchanged. No deployment or Production database
 change was performed. The existing running Testing application can use the
 repaired schema immediately; the saved startup command applies on future starts
 using that configuration. A full backup restore rehearsal remains outstanding.
+
+## Shared verified records update
+
+Administrators can now create **one** activity or volunteer record with multiple
+members, and add/remove participants in the existing edit form. Duplicate member
+IDs are deduplicated; empty, invalid or nonexistent member lists are rejected
+atomically. Every participant change is recorded in the administrator audit.
+Each participant chooses highlights independently. Public profile responses never
+include the participant list. Removing someone clears that member's selections
+and prevents further sharing of the record without affecting the others.
+
+Migration `e05b2c3d4e5f` follows `d05a1b2c3d4e`. It adds
+`verified_community_record_participant` and backfills the existing member for
+every verified record, preserving current profile selections. The original
+`user_id` column is retained as a compatibility pointer to a primary participant;
+sharing authorization uses the participant association. Application account
+deletion moves that pointer to a remaining participant before deleting the old
+account, preserving shared records and others' selections.
+
+Back up Testing before deployment, then let the migration-first Start Command run
+`db upgrade`. The expected revision after this update is **`e05b2c3d4e5f`**.
+No live database changes or deployment were performed for this update.
+
+Downgrading to `d05a1b2c3d4e` is blocked while any record has more than one
+participant, to prevent silent loss of other members' contributions. Preserve a
+backup and resolve shared records explicitly before attempting that rollback;
+restoring the pre-update backup is the recovery alternative. A successful
+single-participant downgrade drops the new association table and keeps the
+original records and member assignments.
+
+Validation: **135 tests passed in 74.55 seconds**, with the same five known SQLite
+expression-index warnings. PostgreSQL 18 checks passed for legacy backfill,
+schema drift, highlight access, the shared-record downgrade guard, and safe
+downgrade/re-upgrade. The disposable local PostgreSQL server was stopped.

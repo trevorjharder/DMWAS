@@ -9,6 +9,7 @@ from sqlalchemy.dialects import postgresql
 from app import (CommunityProfile, CommunityProfileHighlight, DirectoryAccessWindow,
     MembershipDetails, MembershipTerm, User, VerifiedCommunityRecord, VerifiedCommunityRecordAudit,
     db, eligible_community_profiles)
+from app import VerifiedCommunityRecordParticipant, highlight_options
 from tests.conftest import login_as
 
 
@@ -283,3 +284,77 @@ def test_postgres_directory_query_compiles_with_eligibility_in_sql(app):
         sql = str(eligible_community_profiles().statement.compile(dialect=postgresql.dialect()))
         assert "max(membership_term.term_number)" in sql
         assert "date_of_birth" in sql and "EXISTS" in sql
+
+
+def test_shared_record_is_one_entry_with_independent_member_highlights(client, app, directory):
+    login_as(client, directory["admin"])
+    payload = record_payload(directory)
+    payload.pop("user_id")
+    payload["user_ids"] = [str(directory["owner"]), str(directory["viewer"]), str(directory["owner"])]
+    assert client.post("/admin/community/records", data=payload).status_code == 302
+    with app.app_context():
+        record = VerifiedCommunityRecord.query.one()
+        record_id = record.id
+        assert VerifiedCommunityRecordParticipant.query.count() == 2
+        assert [r.id for r in highlight_options(directory["owner"])] == [record_id]
+        assert [r.id for r in highlight_options(directory["viewer"])] == [record_id]
+        assert highlight_options(directory["admin"]) == []
+        assert VerifiedCommunityRecordAudit.query.one().snapshot["member_ids"] == sorted(
+            [directory["owner"], directory["viewer"]])
+    for member_id in (directory["owner"], directory["viewer"]):
+        login_as(client, member_id)
+        assert client.post("/member/profile", data={"csrf_token": "test-csrf-token",
+            "display_name": "Shared activity member", "directory_opt_in": "yes", "show_highlights": "yes",
+            "highlights": str(record_id)}).status_code == 302
+    login_as(client, directory["admin"])
+    for member_id in (directory["owner"], directory["viewer"]):
+        detail = client.get(f"/api/community/profiles/{member_id}").json
+        assert len(detail["highlights"]) == 1
+        assert set(detail["highlights"][0]) == {"title", "date", "type", "volunteer_minutes"}
+    # One member opting out does not affect the other member's choice.
+    login_as(client, directory["owner"])
+    client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Private member"})
+    login_as(client, directory["admin"])
+    assert client.get(f"/api/community/profiles/{directory['owner']}").status_code == 404
+    assert len(client.get(f"/api/community/profiles/{directory['viewer']}").json["highlights"]) == 1
+    # Removing a participant clears only that member's selections.
+    payload.update(record_id=record_id, user_ids=[str(directory["owner"])])
+    assert client.post("/admin/community/records", data=payload).status_code == 302
+    assert client.get(f"/api/community/profiles/{directory['viewer']}").json["highlights"] == []
+    with app.app_context():
+        assert highlight_options(directory["viewer"]) == []
+        assert CommunityProfileHighlight.query.count() == 0
+
+
+def test_deleting_primary_member_preserves_shared_record_for_others(client, app, directory):
+    login_as(client, directory["admin"])
+    payload = record_payload(directory)
+    payload.pop("user_id")
+    payload["user_ids"] = [str(directory["owner"]), str(directory["viewer"])]
+    client.post("/admin/community/records", data=payload)
+    with app.app_context():
+        record_id = VerifiedCommunityRecord.query.one().id
+    login_as(client, directory["viewer"])
+    client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Remaining member",
+        "directory_opt_in": "yes", "show_highlights": "yes", "highlights": str(record_id)})
+    login_as(client, directory["admin"])
+    assert client.post(f"/admin/members/{directory['owner']}/delete", data={
+        "csrf_token": "test-csrf-token"}).status_code == 302
+    with app.app_context():
+        record = db.session.get(VerifiedCommunityRecord, record_id)
+        assert record.user_id == directory["viewer"]
+        assert [participant.user_id for participant in record.participants] == [directory["viewer"]]
+        assert VerifiedCommunityRecordAudit.query.count() == 1
+    assert len(client.get(f"/api/community/profiles/{directory['viewer']}").json["highlights"]) == 1
+
+
+@pytest.mark.parametrize("member_ids", [[], ["invalid"], ["999999999"]])
+def test_shared_record_invalid_member_lists_are_atomic(client, app, directory, member_ids):
+    login_as(client, directory["admin"])
+    payload = record_payload(directory)
+    payload.pop("user_id")
+    payload["user_ids"] = member_ids
+    assert client.post("/admin/community/records", data=payload).status_code == 400
+    with app.app_context():
+        assert VerifiedCommunityRecord.query.count() == 0
+        assert VerifiedCommunityRecordParticipant.query.count() == 0
