@@ -2,11 +2,11 @@
 
 ## Workflows
 
-- Active adult members open **My activities** to save drafts and submit them for review. Active administrators can also create official Society activities. A draft may be incomplete. Submission requires the public title and summary, category, dates, time zone, general area or online format, private meeting details, accessibility information, capacity, and registration mode. In-person activities also require safety information.
+- Active adult members open **My activities** to save a draft or submit it for review directly from the form. Active administrators can also create official Society activities. A draft may be incomplete. Submission requires the public title and summary, category, dates, location, private meeting details, accessibility information, capacity, and registration mode. New activities use Vancouver time. Existing activities retain their recorded time zone. Enter **Online** in Location for virtual activities. In-person activities also require safety information.
 - The **Activity review** queue lets administrators approve, reject, request changes or unpublish. The primary organizer can withdraw a pending submission or edit it after a decision. A material edit saves a new revision and takes an approved listing offline until the new version is approved. An administrator who authors a member proposal needs another administrator to approve it.
-- Primary organizers invite eligible adults by member number. Invitees accept or decline in **My activities**, and an administrator approves accepted assignments. Approved co-organizers can read organizer details for the specific approved activity while both organizers are eligible. The primary organizer or an administrator can revoke access, and a co-organizer can leave.
+- Primary organizers can invite an eligible adult by their directory display name when creating a draft or from the activity workspace. Only eligible adults with a visible, opted-in directory profile appear in the picker. Invitees accept or decline in **My activities**, and an administrator approves accepted assignments. Approved co-organizers can read organizer details for the specific approved activity while both organizers are eligible. The primary organizer or an administrator can revoke access, and a co-organizer can leave.
 - The administrator history records revision, action, status change, actor, time and reviewer note. Stale forms receive a conflict response. Member-workspace mutations share a 30-per-minute account limit.
-- **Activities** shows the approved public title, summary, category, local times and general area. The public location choices are Mount Waddington area, outside Mount Waddington and online. Reviewers check the title and summary for personal information and exact meeting details before approving. The listing query selects public fields only. Eligibility changes, edits, unpublishing and the activity end time can remove a listing.
+- **Activities** shows the approved public title, summary, category, local times and location. The Location text box is for a general area or online format. Reviewers check the title, summary and location for personal information and exact meeting details before approving. The listing query selects public fields only. Eligibility changes, edits, unpublishing and the activity end time can remove a listing.
 
 Public member-organized listings are disabled by default. Leave
 `MEMBER_ACTIVITY_PUBLICATION_ENABLED=false` on live services until the Society
@@ -42,10 +42,12 @@ Restore the preserved backup to recover Phase 06 records.
 
 ## Acceptance checks
 
-Local validation passed all 18 Phase 06 tests. The isolated integration with
-the committed Phase 05 baseline passed all 155 tests, with five existing SQLite
-expression-index reflection warnings. Disposable PostgreSQL 18 passed schema
-checking, upgrade, downgrade, re-upgrade, and publication checks.
+Disposable PostgreSQL 18 passed the original Phase 06 schema checking, upgrade,
+downgrade, re-upgrade, and publication checks. The form update requires no
+database migration and passed 43 activity and permission tests. The core form
+changes also passed the 158-test suite in an isolated integration with the
+committed Phase 05 baseline, with five existing SQLite expression-index
+reflection warnings.
 
 Run `python -m pytest tests/test_activities.py` for Phase 06, then run the full
 suite. Verify the migration and rollback against a disposable PostgreSQL

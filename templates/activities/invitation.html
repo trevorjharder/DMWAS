@@ -17,7 +17,7 @@
       <p>Your co-organizer assignment is awaiting administrator approval.</p>
       {% elif revision %}
       <h2>Approved activity</h2>
-      {{ listing_details(revision.public_details, locations) }}
+      {{ listing_details(revision.public_details, location_label) }}
       <h2>Private organizer details</h2>
       {{ organizer_details(revision.organizer_details, organizer_fields, modes) }}
       {% else %}

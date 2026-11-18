@@ -39,7 +39,7 @@
       {% endif %}
       <h2><a href="{{ url_for(detail_endpoint, activity_id=activity_id) }}">{{ details.title or 'Untitled activity' }}</a></h2>
       {% if view == 'public' %}
-      <p>{{ details.category }} · {{ locations[details.location] }}</p>
+      <p>{{ details.category }} · {{ location_label(details.location) }}</p>
       {{ schedule(details) }}
       <p>{{ details.summary }}</p>
       {% endif %}

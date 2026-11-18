@@ -1623,7 +1623,8 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             raise click.ClickException("That email address already has an account.") from error
         click.echo("Administrator account created.")
 
-    register_activities(app, User=User, MembershipDetails=MembershipDetails,
+    register_activities(app, User=User, CommunityProfile=CommunityProfile,
+                        MembershipDetails=MembershipDetails,
                         MembershipTerm=MembershipTerm, login_required=login_required,
                         admin_required=admin_required)
     return app

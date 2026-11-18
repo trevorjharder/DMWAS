@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "activities/_parts.html" import form_tokens with context %}
+{% from "activities/_parts.html" import cohost_picker, form_tokens with context %}
 {% set title = 'Edit activity draft' if activity else 'New activity draft' %}
 {% block content %}
 <section class="auth-layout">
@@ -37,24 +37,14 @@
           <option value="">Choose a category</option>
           {% for item in categories %}<option {% if public.get('category') == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
         </select>
-        <label for="location">Public location</label>
-        <select id="location" name="location">
-          <option value="">Choose a general area or online</option>
-          {% for key, label in locations.items() %}
-          <option value="{{ key }}" {% if public.get('location') == key %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-        <label for="time_zone">Activity time zone</label>
-        <select id="time_zone" name="time_zone">
-          <option value="">Choose a time zone</option>
-          {% for key, label in time_zones.items() %}
-          <option value="{{ key }}" {% if public.get('time_zone') == key %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
+        <label for="location">Location</label>
+        <input id="location" name="location" maxlength="{{ public_fields.location[1] }}" value="{{ location_label(public.get('location', '')) }}" aria-describedby="location-help" />
+        <p class="form-hint" id="location-help">Enter the general area, or enter Online for a virtual activity.</p>
+        <p class="form-hint" id="activity-times">Activity dates and times use {{ time_zone_label }}.</p>
         <label for="starts">Starts</label>
-        <input id="starts" name="starts" type="datetime-local" value="{{ public.get('starts', '') }}" />
+        <input id="starts" name="starts" type="datetime-local" value="{{ public.get('starts', '') }}" aria-describedby="activity-times" />
         <label for="ends">Ends</label>
-        <input id="ends" name="ends" type="datetime-local" value="{{ public.get('ends', '') }}" />
+        <input id="ends" name="ends" type="datetime-local" value="{{ public.get('ends', '') }}" aria-describedby="activity-times" />
       </fieldset>
       <fieldset class="form-options">
         <legend>Private organizer and reviewer details</legend>
@@ -78,7 +68,9 @@
         <textarea id="{{ key }}" name="{{ key }}" maxlength="{{ maximum }}" rows="3" {% if key in hints %}aria-describedby="{{ key }}-hint"{% endif %}>{{ organizer.get(key, '') }}</textarea>
         {% endfor %}
       </fieldset>
-      <button class="button button--primary" type="submit">Save draft</button>
+      {{ cohost_picker(cohost_choices, selected_cohost) }}
+      <button class="button button--secondary" type="submit" name="draft_action" value="save">Save draft</button>
+      <button class="button button--primary" type="submit" name="draft_action" value="submit">Submit draft</button>
     </form>
   </div>
 </section>

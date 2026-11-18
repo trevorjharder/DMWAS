@@ -24,10 +24,36 @@
 {% endif %}
 {% endmacro %}
 
-{% macro listing_details(details, locations) %}
-<p>{{ details.category }} · {{ locations.get(details.location, '') }}</p>
+{% macro listing_details(details, location_label) %}
+<p>{{ details.category }} · {{ location_label(details.location) }}</p>
 {{ schedule(details) }}
 <p>{{ details.summary }}</p>
+{% endmacro %}
+
+{% macro cohost_picker(choices, selected=None, required=false) %}
+<label for="cohost_id">Co-host</label>
+{% if choices %}
+<select id="cohost_id" class="activity-cohost-select" name="cohost_id" aria-describedby="cohost-help" {% if required %}required{% endif %}>
+  <option value="">{{ 'Choose a co-host' if required else 'No co-host selected' }}</option>
+  {% for user_id, name, repeated in choices %}
+  <option value="{{ user_id }}" {% if user_id == selected %}selected{% endif %}>{{ name }}</option>
+  {% endfor %}
+</select>
+<p class="form-hint" id="cohost-help">Choose an eligible member by their directory display name.</p>
+{% if can_access_adult_hub and choices|selectattr('2')|first %}
+<details>
+  <summary>View profiles with matching names</summary>
+  <ul>
+    {% for user_id, name, repeated in choices if repeated %}
+    <li><a href="{{ url_for('community_profile_view', user_id=user_id) }}" target="_blank" rel="noopener">{{ name }} (opens in a new tab)</a></li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% else %}
+<p class="form-hint" id="cohost-help">No eligible members with a visible directory profile are available to invite.</p>
+<select id="cohost_id" class="activity-cohost-select" aria-describedby="cohost-help" disabled><option>No co-hosts available</option></select>
+{% endif %}
 {% endmacro %}
 
 {% macro organizer_details(details, fields, modes) %}

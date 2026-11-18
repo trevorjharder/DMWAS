@@ -1,4 +1,5 @@
 from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from flask_migrate import downgrade, upgrade
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from activity_models import Activity, ActivityAudit, ActivityCoorganizer, ActivityRevision
-from app import MembershipTerm, User, create_app, db
+from app import CommunityProfile, MembershipTerm, User, create_app, db
 from tests.conftest import login_as, set_csrf
 
 
@@ -22,6 +23,17 @@ def people(make_user):
         make_user(), make_user(is_admin=True), make_user(), make_user(birth_date=date.today())
     )
     db.session.add_all([owner, reviewer, guest, youth])
+    db.session.flush()
+    db.session.add_all([
+        CommunityProfile(user_id=reviewer.id, display_name="Review Volunteer",
+                         general_community="Private community", directory_opt_in=True,
+                         status="approved"),
+        CommunityProfile(user_id=guest.id, display_name="Trail Helper",
+                         general_community="Port McNeill", show_community=True,
+                         directory_opt_in=True, status="approved"),
+        CommunityProfile(user_id=youth.id, display_name="Youth display name",
+                         directory_opt_in=True, status="approved"),
+    ])
     db.session.commit()
     return owner.id, reviewer.id, guest.id, youth.id
 
@@ -30,7 +42,7 @@ def proposal(**changes):
     start = datetime.combine(date.today() + timedelta(days=3), time(12), timezone.utc)
     return {
         "title": "Synthetic trail day", "summary": "Help maintain local trails.",
-        "category": "Hiking", "location": "mount_waddington", "time_zone": "UTC",
+        "category": "Hiking", "location": "Mount Waddington area",
         "starts": start.strftime("%Y-%m-%dT%H:%M"),
         "ends": (start + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M"),
         "capacity": "10", "registration_mode": "organizer_approval",
@@ -141,9 +153,9 @@ def test_coorganizer_consent_scope_reapproval_and_revocation(client, people):
     private = f"{MEMBER}/{activity_id}"
     admin = f"{ADMIN}/{activity_id}"
     invitations = f"{private}/coorganizers"
-    assert change(client, invitations, activity_id, member_number=f"DMWAS-{youth:06d}").status_code == 400
-    assert change(client, invitations, activity_id, member_number=f"DMWAS-{guest:06d}").status_code == 302
-    assert change(client, invitations, activity_id, member_number=f"DMWAS-{guest:06d}").status_code == 409
+    assert change(client, invitations, activity_id, cohost_id=youth).status_code == 400
+    assert change(client, invitations, activity_id, cohost_id=guest).status_code == 302
+    assert change(client, invitations, activity_id, cohost_id=guest).status_code == 409
     assert "Synthetic Member" not in client.get(private).get_data(as_text=True).split("Co-organizers", 1)[1]
     login_as(client, reviewer)
     assert change(client, f"{admin}/coorganizers/{guest}/approve", activity_id).status_code == 409
@@ -152,7 +164,7 @@ def test_coorganizer_consent_scope_reapproval_and_revocation(client, people):
     assert "PRIVATE" not in client.get(private).get_data(as_text=True)
     assert client.get(f"{private}/edit").status_code == 404
     assert change(client, f"{private}/state/submit", activity_id).status_code == 404
-    assert change(client, invitations, activity_id, member_number=f"DMWAS-{reviewer:06d}").status_code == 404
+    assert change(client, invitations, activity_id, cohost_id=reviewer).status_code == 404
     assert change(client, f"{invitations}/{guest}/accept", activity_id).status_code == 302
     submit_and_approve(client, owner, reviewer, activity_id)
     login_as(client, guest)
@@ -192,10 +204,9 @@ def test_permissions_csrf_classification_and_official_listing(app, client, peopl
 
 @pytest.mark.parametrize("invalid, expected", [
     ({"capacity": "0"}, "capacity between"),
-    ({"location": "private address"}, "public location"),
-    ({"starts": "2025-11-02T01:30", "time_zone": "America/Edmonton"}, "occur exactly once"),
-    ({"starts": "2025-03-09T02:30", "time_zone": "America/Edmonton"}, "occur exactly once"),
-    ({"time_zone": "Not/a-zone"}, "a time zone"),
+    ({"location": "a" * 121}, "Location must be valid text"),
+    ({"starts": "2025-11-02T01:30"}, "occur exactly once"),
+    ({"starts": "2025-03-09T02:30"}, "occur exactly once"),
     ({"summary": "a" * 801}, "up to 800"),
 ])
 def test_invalid_draft_is_not_saved(client, people, invalid, expected):
@@ -263,10 +274,13 @@ def test_activity_quota_is_shared_by_account_across_sessions(app, client, people
 def test_member_deletion_unpublishes_and_detaches_owned_and_invited_activities(app, client, people):
     owner, reviewer, guest, _ = people
     app.config["MEMBER_ACTIVITY_PUBLICATION_ENABLED"] = True
+    db.session.add(CommunityProfile(user_id=owner, display_name="Event Organizer",
+                                    directory_opt_in=True, status="approved"))
+    db.session.commit()
     login_as(client, guest)
     second_activity = create_draft(client, **proposal())
     assert change(client, f"{MEMBER}/{second_activity}/coorganizers", second_activity,
-                  member_number=f"DMWAS-{owner:06d}").status_code == 302
+                  cohost_id=owner).status_code == 302
     login_as(client, owner)
     activity_id = create_draft(client, **proposal())
     submit_and_approve(client, owner, reviewer, activity_id)
@@ -333,3 +347,94 @@ def test_administrator_cannot_self_approve_a_member_proposal(client, people):
     assert change(client, f"{MEMBER}/{activity_id}/state/submit", activity_id).status_code == 302
     assert change(client, f"{ADMIN}/{activity_id}/state/approve", activity_id,
                   confirm_public="yes").status_code == 403
+
+
+def test_creation_form_offers_location_submission_and_private_cohost_picker(client, people):
+    login_as(client, people[0])
+    html = client.get(f"{MEMBER}/new").get_data(as_text=True)
+    assert '<label for="location">Location</label>' in html
+    assert '<input id="location" name="location"' in html
+    assert 'name="time_zone"' not in html
+    assert "Pacific (Vancouver)" in html
+    assert html.index(">Save draft</button>") < html.index(">Submit draft</button>")
+    assert "Trail Helper · Port McNeill" in html and "Review Volunteer" in html
+    for hidden in ("Private community", "Youth display name", "Synthetic Member", "member_number"):
+        assert hidden not in html
+
+
+def test_matching_cohost_names_link_to_their_separate_profiles(client, people):
+    owner, reviewer, guest, _ = people
+    profile = db.session.get(User, reviewer).community_profile
+    profile.display_name = "Trail Helper"
+    db.session.get(User, guest).community_profile.show_community = False
+    db.session.commit()
+    login_as(client, owner)
+    html = client.get(f"{MEMBER}/new").get_data(as_text=True)
+    assert "Trail Helper (profile 1)" in html and "Trail Helper (profile 2)" in html
+    assert f'href="/members/{reviewer}/profile"' in html
+    assert f'href="/members/{guest}/profile"' in html
+
+
+def test_creation_can_submit_unsaved_details_and_invite_a_cohost(app, client, people):
+    owner, reviewer, guest, _ = people
+    login_as(client, owner)
+    fields = proposal(location="Near Port Hardy", time_zone="UTC")
+    activity_id = create_draft(client, **fields, draft_action="submit", cohost_id=guest)
+    revision = db.session.get(ActivityRevision, (activity_id, 1))
+    assert revision.public_details["location"] == "Near Port Hardy"
+    assert revision.public_details["time_zone"] == "America/Vancouver"
+    expected = datetime.fromisoformat(fields["starts"]).replace(
+        tzinfo=ZoneInfo("America/Vancouver")).astimezone(timezone.utc)
+    assert revision.starts_at.replace(tzinfo=timezone.utc) == expected
+    assert db.session.get(Activity, activity_id).status == "submitted"
+    assert db.session.get(ActivityCoorganizer, (activity_id, guest)).status == "invited"
+    assert [row.action for row in ActivityAudit.query.order_by(ActivityAudit.id)] == [
+        "create_draft", "coorganizer_invite", "submit",
+    ]
+    login_as(client, reviewer)
+    assert change(client, f"{ADMIN}/{activity_id}/state/approve", activity_id,
+                  confirm_public="yes").status_code == 302
+    app.config["MEMBER_ACTIVITY_PUBLICATION_ENABLED"] = True
+    assert "Near Port Hardy" in app.test_client().get(f"/activities/{activity_id}").get_data(as_text=True)
+
+
+def test_create_form_rechecks_cohost_visibility_and_submission_rules(client, people):
+    owner, _, guest, _ = people
+    login_as(client, owner)
+    response = client.post(f"{MEMBER}/new", data={
+        "csrf_token": CSRF, "draft_action": "submit", "cohost_id": guest, **proposal(location=""),
+    })
+    html = response.get_data(as_text=True)
+    assert response.status_code == 400
+    assert "Enter a location." in html
+    assert f'<option value="{guest}" selected>Trail Helper' in html
+    db.session.get(User, guest).community_profile.directory_opt_in = False
+    db.session.commit()
+    response = client.post(f"{MEMBER}/new", data={
+        "csrf_token": CSRF, "draft_action": "save", "cohost_id": guest,
+    })
+    assert response.status_code == 400
+    assert "Choose an available co-host" in response.get_data(as_text=True)
+    assert Activity.query.count() == ActivityCoorganizer.query.count() == 0
+
+
+def test_edit_retains_legacy_timezone_and_normalizes_location_label(app, client, people):
+    owner, reviewer, _, _ = people
+    login_as(client, owner)
+    fields = proposal()
+    activity_id = create_draft(client, **fields)
+    revision = db.session.get(ActivityRevision, (activity_id, 1))
+    revision.public_details = {**revision.public_details, "location": "mount_waddington", "time_zone": "UTC"}
+    revision.starts_at = datetime.fromisoformat(fields["starts"]).replace(tzinfo=timezone.utc)
+    revision.ends_at = datetime.fromisoformat(fields["ends"]).replace(tzinfo=timezone.utc)
+    db.session.commit()
+    edit = f"{MEMBER}/{activity_id}/edit"
+    assert 'value="Mount Waddington area"' in client.get(edit).get_data(as_text=True)
+    assert change(client, edit, activity_id, **fields).status_code == 302
+    assert db.session.get(Activity, activity_id).revision_number == 1
+    assert change(client, edit, activity_id, **fields, draft_action="submit").status_code == 302
+    login_as(client, reviewer)
+    assert change(client, f"{ADMIN}/{activity_id}/state/approve", activity_id,
+                  confirm_public="yes").status_code == 302
+    app.config["MEMBER_ACTIVITY_PUBLICATION_ENABLED"] = True
+    assert "Mount Waddington area" in app.test_client().get(f"/activities/{activity_id}").get_data(as_text=True)

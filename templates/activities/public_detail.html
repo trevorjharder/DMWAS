@@ -7,7 +7,7 @@
   <article class="hub-card">
     <p>{{ 'Society activity' if listing.classification == 'official' else 'Member-organized activity' }}</p>
     <h1>{{ title }}</h1>
-    {{ listing_details(listing.public_details, locations) }}
+    {{ listing_details(listing.public_details, location_label) }}
   </article>
 </div>
 {% endblock %}

@@ -1,16 +1,16 @@
+from collections import Counter
 from datetime import date, datetime, timezone
-import re
 
 from flask import (
     Blueprint, abort, current_app, flash, g, make_response, redirect, render_template, request,
     url_for,
 )
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm.exc import StaleDataError
 
 from activity_forms import (
-    CATEGORIES, LOCATIONS, ORGANIZER_TEXT_FIELDS, PUBLIC_TEXT_FIELDS, REGISTRATION_MODES,
-    TIME_ZONES, read_activity_form, validate_activity,
+    ACTIVITY_TIME_ZONE, CATEGORIES, ORGANIZER_TEXT_FIELDS, PUBLIC_TEXT_FIELDS,
+    REGISTRATION_MODES, TIME_ZONE_LABELS, location_label, read_activity_form, validate_activity,
 )
 from activity_models import (
     Activity, ActivityActionWindow, ActivityAudit, ActivityCoorganizer, ActivityRevision,
@@ -107,34 +107,83 @@ def activity_page(template, query, **context):
                            has_next=len(rows) > PAGE_SIZE, **context)
 
 
-def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_required,
-                        admin_required):
+def register_activities(app, *, User, CommunityProfile, MembershipDetails, MembershipTerm,
+                        login_required, admin_required):
     hub = Blueprint("activities", __name__)
 
     @hub.context_processor
     def activity_locations():
-        return {"locations": LOCATIONS}
+        return {"location_label": location_label}
+
+    def active_adult_ids():
+        today = date.today()
+        latest_term = db.select(func.max(MembershipTerm.term_number)).where(
+            MembershipTerm.user_id == User.id
+        ).correlate(User).scalar_subquery()
+        # Match the central eligibility policy, including legacy active accounts.
+        return db.select(User.id).where(
+            User.status == "active",
+            User.membership_details.has(
+                MembershipDetails.date_of_birth <= adult_birth_date_cutoff(today)),
+            or_(~User.membership_terms.any(), User.membership_terms.any(and_(
+                MembershipTerm.term_number == latest_term, MembershipTerm.status == "active",
+                MembershipTerm.expiry_date >= today,
+                MembershipTerm.payment_status.in_(("paid", "waived")),
+            ))),
+        )
+
+    def visible_cohosts():
+        return (
+            CommunityProfile.status == "approved",
+            CommunityProfile.directory_opt_in.is_(True),
+            CommunityProfile.user_id.in_(active_adult_ids()),
+        )
+
+    def cohost_choices(activity):
+        query = db.session.query(
+            CommunityProfile.user_id, CommunityProfile.display_name,
+            case((CommunityProfile.show_community.is_(True), CommunityProfile.general_community)),
+        ).filter(*visible_cohosts(), CommunityProfile.user_id != g.current_user.id)
+        if activity:
+            already_invited = db.select(ActivityCoorganizer.user_id).where(
+                ActivityCoorganizer.activity_id == activity.id)
+            query = query.filter(CommunityProfile.user_id.not_in(already_invited))
+        rows = query.order_by(func.lower(CommunityProfile.display_name), CommunityProfile.user_id)
+        labels = [(user_id, f"{name} · {community}" if community else name)
+                  for user_id, name, community in rows]
+        totals = Counter(label.casefold() for _, label in labels)
+        seen = Counter()
+        choices = []
+        for user_id, label in labels:
+            key = label.casefold()
+            repeated = totals[key] > 1
+            if repeated:
+                seen[key] += 1
+                label = f"{label} (profile {seen[key]})"
+            choices.append((user_id, label, repeated))
+        return choices
+
+    def check_cohost_selection():
+        cohost_id = request.form.get("cohost_id", type=int)
+        if (not cohost_id or not 0 < cohost_id <= 2_147_483_647
+                or cohost_id == g.current_user.id
+                or not CommunityProfile.query.filter(
+                    *visible_cohosts(), CommunityProfile.user_id == cohost_id).with_entities(
+                        CommunityProfile.user_id).first()):
+            return None, "Choose an available co-host from the list."
+        return cohost_id, None
+
+    def add_cohost(activity, cohost_id):
+        activity.touch()
+        db.session.add(ActivityCoorganizer(activity_id=activity.id, user_id=cohost_id))
+        audit(activity, "coorganizer_invite", None, "invited", subject_id=cohost_id)
 
     def public_query():
         member_publication = current_app.config["MEMBER_ACTIVITY_PUBLICATION_ENABLED"]
         classifications = Activity.classification == "official"
         if member_publication:
-            today = date.today()
-            latest_term = db.select(func.max(MembershipTerm.term_number)).where(
-                MembershipTerm.user_id == User.id
-            ).correlate(User).scalar_subquery()
-            # Match the central eligibility policy, including legacy active accounts.
-            adult_ids = db.select(User.id).where(
-                User.status == "active",
-                User.membership_details.has(MembershipDetails.date_of_birth <= adult_birth_date_cutoff(today)),
-                or_(~User.membership_terms.any(), User.membership_terms.any(and_(
-                    MembershipTerm.term_number == latest_term, MembershipTerm.status == "active",
-                    MembershipTerm.expiry_date >= today,
-                    MembershipTerm.payment_status.in_(("paid", "waived")),
-                ))),
-            )
             classifications = or_(classifications, and_(
-                Activity.classification == "member", Activity.organizer_id.in_(adult_ids)))
+                Activity.classification == "member", Activity.organizer_id.in_(active_adult_ids())))
         return db.session.query(
             Activity.id, Activity.classification, ActivityRevision.public_details,
         ).join(ActivityRevision, CURRENT_REVISION).filter(
@@ -157,47 +206,85 @@ def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_r
         return activity, invited.first_or_404()
 
     def render_draft(activity, public, organizer, errors=()):
+        zone = public.get("time_zone") or ACTIVITY_TIME_ZONE
         return render_template(
             "activities/draft.html", activity=activity, public=public, organizer=organizer,
-            errors=errors, categories=CATEGORIES, locations=LOCATIONS, time_zones=TIME_ZONES,
+            errors=errors, categories=CATEGORIES, time_zone_label=TIME_ZONE_LABELS.get(zone, zone),
             modes=REGISTRATION_MODES, public_fields=PUBLIC_TEXT_FIELDS,
             organizer_fields=ORGANIZER_TEXT_FIELDS, can_review=can_review(g.current_user),
+            cohost_choices=cohost_choices(activity),
+            selected_cohost=request.form.get("cohost_id", type=int),
         )
 
     def save_draft(activity=None):
-        public, organizer = read_activity_form(request.form)
-        errors, starts_at, ends_at = validate_activity(public, organizer)
+        form_action = request.form.get("draft_action", "save")
+        if form_action not in {"save", "submit"}:
+            abort(400)
+        submitting = form_action == "submit"
+
+        current = None
+        previous = {}
+        if activity:
+            current = db.session.get(ActivityRevision, (activity.id, activity.revision_number))
+            previous = dict(current.public_details)
+            previous["location"] = location_label(previous.get("location", ""))
+            previous["time_zone"] = previous.get("time_zone") or ACTIVITY_TIME_ZONE
+        public, organizer = read_activity_form(
+            request.form, time_zone=previous.get("time_zone", ACTIVITY_TIME_ZONE))
+        errors, starts_at, ends_at = validate_activity(public, organizer, submitting=submitting)
         if activity is None:
             classification = request.form.get("classification", "member")
             if classification not in {"member", "official"}:
                 abort(400)
             if not eligible_organizer(g.current_user, classification):
                 abort(403)
+        cohost_id = None
+        if request.form.get("cohost_id"):
+            cohost_id, error = check_cohost_selection()
+            if error:
+                errors.append(error)
+            elif activity and db.session.get(ActivityCoorganizer, (activity.id, cohost_id)):
+                errors.append("An invitation already exists for that co-host.")
         if errors:
             return render_draft(activity, public, organizer, errors), 400
+
+        material_change = current is None or previous != public or current.organizer_details != organizer
+        draft_status = "draft" if material_change else activity.status
+        new_status = apply_transition("submit", draft_status, MEMBER_TRANSITIONS) if submitting else draft_status
+        if not (material_change or submitting or cohost_id):
+            flash("The draft already contains those details.", "info")
+            return redirect(url_for(".member_detail", activity_id=activity.id))
+
+        was_approved = activity is not None and activity.status == "approved"
         if activity is None:
             activity = Activity(organizer_id=g.current_user.id, classification=classification)
             db.session.add(activity)
             db.session.flush()
             previous_status, action = None, "create_draft"
-        else:
-            current = db.session.get(ActivityRevision, (activity.id, activity.revision_number))
-            if current.public_details == public and current.organizer_details == organizer:
-                flash("The draft already contains those details.", "info")
-                return redirect(url_for(".member_detail", activity_id=activity.id))
+        elif material_change:
             previous_status, action = activity.status, "revise"
             activity.revision_number += 1
-            activity.status = "draft"
-        db.session.add(ActivityRevision(
-            activity_id=activity.id, number=activity.revision_number, public_details=public,
-            organizer_details=organizer, starts_at=starts_at, ends_at=ends_at,
-        ))
-        audit(activity, action, previous_status, activity.status)
+
+        if material_change:
+            db.session.add(ActivityRevision(
+                activity_id=activity.id, number=activity.revision_number, public_details=public,
+                organizer_details=organizer, starts_at=starts_at, ends_at=ends_at,
+            ))
+            audit(activity, action, previous_status, "draft")
+        if cohost_id:
+            add_cohost(activity, cohost_id)
+        if submitting:
+            audit(activity, "submit", draft_status, new_status)
+        activity.status = new_status
         commit_activity()
-        if previous_status == "approved":
+        if submitting:
+            flash("Draft submitted for review.", "success")
+        elif material_change and was_approved:
             flash("New draft saved. The listing needs approval before it can appear again.", "info")
-        else:
+        elif material_change:
             flash("Draft saved.", "success")
+        if cohost_id:
+            flash("Invitation added to the member’s activity inbox.", "success")
         return redirect(url_for(".member_detail", activity_id=activity.id))
 
     @hub.get("/activities")
@@ -243,7 +330,7 @@ def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_r
         if request.method == "POST":
             limit_activity_action()
             return save_draft()
-        return render_draft(None, {"time_zone": "America/Vancouver"}, {})
+        return render_draft(None, {}, {})
 
     @hub.get("/member/activities/<int:activity_id>")
     @login_required
@@ -267,6 +354,7 @@ def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_r
         ).filter(ActivityAudit.note.is_not(None)).order_by(ActivityAudit.id.desc()).first()
         return render_template("activities/workspace.html", activity=activity, revision=revision,
                                coorganizers=coorganizers(activity), latest_note=latest_note,
+                               cohost_choices=cohost_choices(activity),
                                statuses=STATUSES, organizer_fields=ORGANIZER_TEXT_FIELDS,
                                modes=REGISTRATION_MODES)
 
@@ -311,8 +399,11 @@ def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_r
         return redirect(url_for(".member_detail", activity_id=activity_id))
 
     def coorganizers(activity):
-        return db.session.query(ActivityCoorganizer, User).join(
-            User, User.id == ActivityCoorganizer.user_id).filter(
+        return db.session.query(ActivityCoorganizer, User, CommunityProfile.display_name).join(
+            User, User.id == ActivityCoorganizer.user_id).outerjoin(
+                CommunityProfile, and_(
+                    CommunityProfile.user_id == User.id, *visible_cohosts(),
+                )).filter(
             ActivityCoorganizer.activity_id == activity.id).order_by(User.id).all()
 
     @hub.post("/member/activities/<int:activity_id>/coorganizers")
@@ -322,19 +413,12 @@ def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_r
         limit_activity_action()
         activity, _ = member_activity(activity_id, owner_only=True)
         check_version(activity)
-        number = request.form.get("member_number", "").strip().upper()
-        invited = None
-        if re.fullmatch(r"DMWAS-[0-9]{6,10}", number):
-            member_id = int(number.split("-")[1])
-            if 0 < member_id <= 2_147_483_647:
-                invited = db.session.get(User, member_id)
-        if not can_propose(invited) or invited.id == activity.organizer_id:
-            abort(400, description="The invitation could not be sent to that member number.")
-        if db.session.get(ActivityCoorganizer, (activity.id, invited.id)):
+        cohost_id, error = check_cohost_selection()
+        if error:
+            abort(400, description=error)
+        if db.session.get(ActivityCoorganizer, (activity.id, cohost_id)):
             abort(409, description="An invitation already exists for that member.")
-        activity.touch()
-        db.session.add(ActivityCoorganizer(activity_id=activity.id, user_id=invited.id))
-        audit(activity, "coorganizer_invite", None, "invited", subject_id=invited.id)
+        add_cohost(activity, cohost_id)
         commit_activity()
         flash("Invitation added to the member’s activity inbox.", "success")
         return redirect(url_for(".member_detail", activity_id=activity_id))
@@ -416,7 +500,7 @@ def register_activities(app, *, User, MembershipDetails, MembershipTerm, login_r
             abort(400, description="Enter a reviewer note of up to 1,000 characters.")
         if action == "approve":
             if request.form.get("confirm_public") != "yes":
-                abort(400, description="Confirm the public title and summary are suitable to share.")
+                abort(400, description="Confirm the public title, summary and location are suitable to share.")
             organizer = db.session.get(User, activity.organizer_id) if activity.organizer_id else None
             if not eligible_organizer(organizer, activity.classification):
                 abort(409, description="The primary organizer is no longer eligible.")

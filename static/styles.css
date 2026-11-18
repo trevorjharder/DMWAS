@@ -701,7 +701,8 @@ h3 {
   font-size: 0.92rem;
   font-weight: 700;
 }
-.auth-card input:not([type="checkbox"]) {
+.auth-card input:not([type="checkbox"]),
+.auth-card .activity-cohost-select {
   width: 100%;
   min-height: 2.8rem;
   padding: 0.65rem 0.75rem;
@@ -710,6 +711,9 @@ h3 {
   background: white;
   color: var(--ink);
   font: inherit;
+}
+.auth-card .activity-cohost-select {
+  min-width: 0;
 }
 .auth-card input[type="radio"],
 .auth-card input[type="checkbox"] {

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "activities/_parts.html" import form_tokens, listing_details, organizer_details, pagination with context %}
+{% from "activities/_parts.html" import cohost_picker, form_tokens, listing_details, organizer_details, pagination with context %}
 {% set title = revision.public_details.title or 'Untitled activity' %}
 {% block content %}
 <section class="auth-layout">
@@ -21,7 +21,7 @@
     {% endif %}
 
     <h2>Public listing preview</h2>
-    {{ listing_details(revision.public_details, locations) }}
+    {{ listing_details(revision.public_details, location_label) }}
     <h2>Private organizer details</h2>
     {{ organizer_details(revision.organizer_details, organizer_fields, modes) }}
 
@@ -41,7 +41,7 @@
       <form method="post">
         {{ form_tokens(activity) }}
         {% if activity.status == 'submitted' %}
-        <label class="check-label"><input type="checkbox" name="confirm_public" value="yes" />I reviewed the public fields for personal details, precise locations and private links.</label>
+        <label class="check-label"><input type="checkbox" name="confirm_public" value="yes" />I reviewed the title, summary and location for personal details, precise locations and private links.</label>
         {% endif %}
         <label for="note">Reviewer note</label>
         <p class="form-hint" id="note-hint">The primary organizer can read this note. A note is required for a change request, rejection or unpublishing.</p>
@@ -60,9 +60,9 @@
 
     {% if revision.number == activity.revision_number %}
     <h2>Co-organizers</h2>
-    {% for invitation, member in coorganizers %}
+    {% for invitation, member, display_name in coorganizers %}
     <div class="form-options">
-      <p>{{ member.member_number }}{% if reviewing %} · {{ member.full_name }}{% endif %} · {{ invitation.status|capitalize }}</p>
+      <p>{{ member.full_name if reviewing else display_name or 'Co-host' }} · {{ invitation.status|capitalize }}</p>
       {% set transition_endpoint = '.review_coorganizer' if reviewing else '.member_coorganizer_transition' %}
       {% if invitation.status in ['invited', 'accepted', 'approved'] %}
       <form method="post" action="{{ url_for(transition_endpoint, activity_id=activity.id, user_id=member.id, action='revoke') }}">
@@ -75,12 +75,11 @@
       {% endif %}
     </div>
     {% else %}<p>No co-organizers have been invited.</p>{% endfor %}
-    {% if not reviewing %}
+    {% if not reviewing and cohost_choices %}
     <form method="post" action="{{ url_for('.invite_coorganizer', activity_id=activity.id) }}">
       {{ form_tokens(activity) }}
-      <label for="member_number">Co-organizer’s member number</label>
-      <input id="member_number" name="member_number" placeholder="DMWAS-000123" maxlength="16" required />
-      <button class="button button--secondary" type="submit">Invite co-organizer</button>
+      {{ cohost_picker(cohost_choices, required=true) }}
+      <button class="button button--secondary" type="submit">Invite co-host</button>
     </form>
     {% endif %}
     {% endif %}

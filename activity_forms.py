@@ -5,12 +5,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 CATEGORIES = ("Rock climbing", "Bouldering", "Hiking", "Mountaineering",
               "Trail development and maintenance", "Outdoor education", "Other")
-LOCATIONS = {
+LEGACY_LOCATIONS = {
     "mount_waddington": "Mount Waddington area",
     "other_area": "Outside Mount Waddington",
     "online": "Online",
 }
-TIME_ZONES = {
+ACTIVITY_TIME_ZONE = "America/Vancouver"
+TIME_ZONE_LABELS = {
     "America/Vancouver": "Pacific (Vancouver)",
     "America/Edmonton": "Mountain (Edmonton)",
     "America/Toronto": "Eastern (Toronto)",
@@ -23,6 +24,7 @@ REGISTRATION_MODES = {
 PUBLIC_TEXT_FIELDS = {
     "title": ("Activity title", 120),
     "summary": ("Public summary", 800),
+    "location": ("Location", 120),
 }
 ORGANIZER_TEXT_FIELDS = {
     "meeting_details": ("Meeting location or online link", 800),
@@ -33,9 +35,14 @@ ORGANIZER_TEXT_FIELDS = {
 }
 
 
-def read_activity_form(form):
+def location_label(value):
+    return LEGACY_LOCATIONS.get(value, value)
+
+
+def read_activity_form(form, *, time_zone):
     public = {name: form.get(name, "").strip() for name in (
-        *PUBLIC_TEXT_FIELDS, "category", "location", "time_zone", "starts", "ends")}
+        *PUBLIC_TEXT_FIELDS, "category", "starts", "ends")}
+    public["time_zone"] = time_zone
     organizer = {name: form.get(name, "").strip() for name in (
         *ORGANIZER_TEXT_FIELDS, "capacity", "registration_mode")}
     return public, organizer
@@ -64,8 +71,6 @@ def validate_activity(public, organizer, *, submitting=False):
                 errors.append(f"{label} must be valid text of up to {limit} characters.")
     for value, choices, label in (
         (public["category"], CATEGORIES, "a category"),
-        (public["location"], LOCATIONS, "a public location"),
-        (public["time_zone"], TIME_ZONES, "a time zone"),
         (organizer["registration_mode"], REGISTRATION_MODES, "a registration mode"),
     ):
         if (value or submitting) and value not in choices:
@@ -78,7 +83,7 @@ def validate_activity(public, organizer, *, submitting=False):
         errors.append("Enter a capacity between 1 and 1,000.")
 
     starts_at = ends_at = None
-    if public["time_zone"] in TIME_ZONES and (public["starts"] or public["ends"]):
+    if public["starts"] or public["ends"]:
         try:
             zone = ZoneInfo(public["time_zone"])
             if public["starts"]:
@@ -86,7 +91,7 @@ def validate_activity(public, organizer, *, submitting=False):
             if public["ends"]:
                 ends_at = local_to_utc(public["ends"], zone)
         except (ValueError, ZoneInfoNotFoundError, OverflowError):
-            errors.append("Enter dates and times that occur exactly once in the selected time zone.")
+            errors.append("Enter dates and times that occur exactly once in the activity’s time zone.")
         if starts_at and ends_at and ends_at <= starts_at:
             errors.append("The end must be after the start.")
 
@@ -96,11 +101,13 @@ def validate_activity(public, organizer, *, submitting=False):
         for values, name, label in (
             (public, "title", "an activity title"),
             (public, "summary", "a public summary"),
+            (public, "location", "a location"),
             (organizer, "meeting_details", "a meeting location or online link for review"),
             (organizer, "accessibility", "accessibility information"),
         ):
             if not values[name]:
                 errors.append(f"Enter {label}.")
-        if public["location"] in {"mount_waddington", "other_area"} and not organizer["safety"]:
+        if (public["location"] and public["location"].casefold() != "online"
+                and not organizer["safety"]):
             errors.append("Enter safety information for the in-person activity.")
     return errors, starts_at, ends_at
