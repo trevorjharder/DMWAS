@@ -8,6 +8,13 @@
     <p>{{ 'Society activity' if listing.classification == 'official' else 'Member-organized activity' }}</p>
     <h1>{{ title }}</h1>
     {{ listing_details(listing.public_details, location_label) }}
+    {% if config.ACTIVITY_REGISTRATION_ENABLED %}
+      {% if can_use_activity_registration or signup_open %}
+      <a class="button button--primary" href="{{ url_for('registrations.enroll', activity_id=listing.id) }}">
+        {{ ('Register' if signup_open else 'View registration') if can_use_activity_registration else 'Sign in to register' }}
+      </a>
+      {% endif %}
+    {% endif %}
   </article>
 </div>
 {% endblock %}

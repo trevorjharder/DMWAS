@@ -71,6 +71,8 @@ The constitution supplied so far contains the Society name and purposes, but doe
 
 Community Hub Phase 06 adds activity proposals, administrator review, co-organizer approvals, and public activity listings. See the [Phase 06 workflow and migration notes](Docs/community_hub_phase_06.md) for the publication gate and recovery steps.
 
+Community Hub Phase 07 adds member registration, waitlists, attendance, and volunteer-hours verification. See the [Phase 07 workflow and migration notes](Docs/community_hub_phase_07.md) for launch settings, the reconciliation job, and rollback.
+
 ## Next steps
 
 Before launch, provide approved public contact details, logo/colors/photos, any initial notices, and the Society's membership/approval policy. Configure and test the email delivery service securely in Railway. Member documents, the member directory, notice editing, and online dues payments are outside this first implementation step.

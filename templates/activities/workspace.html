@@ -6,6 +6,9 @@
   <div class="auth-card auth-card--wide">
     <p><a href="{{ url_for('.admin_list' if reviewing else '.member_list') }}">{{ 'Activity review queue' if reviewing else 'My activities' }}</a></p>
     <h1>{{ title }}</h1>
+    {% if not reviewing and config.ACTIVITY_REGISTRATION_ENABLED and revision.starts_at %}
+    <a class="button button--secondary" href="{{ url_for('registrations.roster', activity_id=activity.id) }}">Manage roster</a>
+    {% endif %}
     <p>{{ 'Society activity' if activity.classification == 'official' else 'Member-organized activity' }} · {{ statuses[activity.status] }} · Version {{ revision.number }}</p>
     {% if reviewing %}
       <p>Primary organizer {{ organizer_user.member_number if organizer_user else 'Removed' }}{% if organizer_user %} · {{ organizer_user.full_name }}{% endif %}</p>

@@ -36,6 +36,7 @@ from activity_models import anonymize_activity_member
 from extensions import db
 
 from permissions import Capability, has_capability, is_active_member
+from registration_service import RegistrationPolicy, detach_member_registrations
 
 
 migrate = Migrate()
@@ -345,6 +346,27 @@ def _is_deployed_environment() -> bool:
     }
 
 
+def _registration_policy(require_explicit: bool) -> RegistrationPolicy:
+    defaults = RegistrationPolicy()
+    options = {}
+    for name, minimum, maximum in (
+        ("offer_hours", 1, 168), ("signup_close_minutes", 0, 10080),
+        ("cancellation_close_minutes", 0, 10080), ("renewal_grace_hours", 0, 168),
+    ):
+        env_name = "ACTIVITY_" + name.upper()
+        value = os.environ.get(env_name)
+        if value is None and not require_explicit:
+            options[name] = getattr(defaults, name)
+            continue
+        if value is None or not re.fullmatch(r"[0-9]{1,5}", value) or not minimum <= int(value) <= maximum:
+            raise RuntimeError(f"{env_name} must be set to a whole number from {minimum} to {maximum}.")
+        options[name] = int(value)
+    if require_explicit and "ACTIVITY_ALLOW_YOUTH_REGISTRATION" not in os.environ:
+        raise RuntimeError("Set ACTIVITY_ALLOW_YOUTH_REGISTRATION explicitly before enabling registration.")
+    options["allow_youth"] = _environment_flag("ACTIVITY_ALLOW_YOUTH_REGISTRATION", defaults.allow_youth)
+    return RegistrationPolicy(**options)
+
+
 def _password_reset_code_hash(secret_key: str, email: str, code: str) -> str:
     """Hash a low-entropy code with the app secret so database leaks don't expose it."""
     message = f"{email.strip().lower()}:{code}".encode("utf-8")
@@ -491,6 +513,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         MEMBER_ACTIVITY_PUBLICATION_ENABLED=_environment_flag(
             "MEMBER_ACTIVITY_PUBLICATION_ENABLED", False
         ),
+        ACTIVITY_REGISTRATION_ENABLED=_environment_flag(
+            "ACTIVITY_REGISTRATION_ENABLED", not _is_deployed_environment()
+        ),
         ACTIVITY_ACTIONS_PER_MINUTE=30,
     )
     if test_config:
@@ -506,6 +531,12 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             raise RuntimeError("DATABASE_URL must point to PostgreSQL in deployed environments.")
         if not app.config.get("SESSION_COOKIE_SECURE"):
             raise RuntimeError("SESSION_COOKIE_SECURE=true is required in staging and production.")
+
+    if "ACTIVITY_REGISTRATION_POLICY" not in app.config:
+        app.config["ACTIVITY_REGISTRATION_POLICY"] = _registration_policy(
+            _is_deployed_environment() and not app.config["TESTING"]
+            and app.config["ACTIVITY_REGISTRATION_ENABLED"]
+        )
 
     db.init_app(app)
     migrate.init_app(app, db, compare_type=True)
@@ -534,6 +565,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         current_user = g.get("current_user")
         return {
             "current_user": current_user,
+            "can_use_activity_registration": has_capability(
+                current_user, Capability.ACTIVITY_REGISTRATION
+            ),
             "can_use_activity_workspace": (
                 has_capability(current_user, Capability.ACTIVITY_PROPOSAL)
                 or has_capability(current_user, Capability.ADMIN_REVIEW)
@@ -548,7 +582,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        if request.blueprint == "activities":
+        if request.blueprint in {"activities", "registrations"}:
             response.headers["Cache-Control"] = "private, no-store"
             response.vary.add("Cookie")
         return response
@@ -1344,6 +1378,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             abort(404)
 
         member_name = member.full_name
+        detach_member_registrations(member.id)
         MembershipDetails.query.filter_by(user_id=member.id).delete(
             synchronize_session=False
         )

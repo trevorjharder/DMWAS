@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from flask import (
     Blueprint, abort, current_app, flash, g, make_response, redirect, render_template, request,
@@ -18,6 +18,9 @@ from activity_models import (
 from extensions import db
 from permissions import Capability, adult_birth_date_cutoff, has_capability
 from rate_limits import account_quota_retry_after
+from registration_models import ActivityRegistration
+from registration_routes import register_registration_routes
+from registration_service import as_utc, lock_activity, update_registrations_for_activity
 
 
 PAGE_SIZE = 20
@@ -186,6 +189,7 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
                 Activity.classification == "member", Activity.organizer_id.in_(active_adult_ids())))
         return db.session.query(
             Activity.id, Activity.classification, ActivityRevision.public_details,
+            ActivityRevision.starts_at,
         ).join(ActivityRevision, CURRENT_REVISION).filter(
             Activity.status == "approved", Activity.organizer_id.is_not(None),
             ActivityRevision.ends_at > datetime.now(timezone.utc), classifications,
@@ -256,6 +260,10 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
             return redirect(url_for(".member_detail", activity_id=activity.id))
 
         was_approved = activity is not None and activity.status == "approved"
+        if (material_change and was_approved and current.starts_at
+                and as_utc(current.starts_at) <= datetime.now(timezone.utc)
+                and ActivityRegistration.query.filter_by(activity_id=activity.id).first()):
+            abort(409, description="An activity with registrations cannot be revised after it starts.")
         if activity is None:
             activity = Activity(organizer_id=g.current_user.id, classification=classification)
             db.session.add(activity)
@@ -271,6 +279,8 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
                 organizer_details=organizer, starts_at=starts_at, ends_at=ends_at,
             ))
             audit(activity, action, previous_status, "draft")
+            if was_approved:
+                update_registrations_for_activity(activity, "activity_paused")
         if cohost_id:
             add_cohost(activity, cohost_id)
         if submitting:
@@ -297,7 +307,13 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
     @hub.get("/activities/<int:activity_id>")
     def public_detail(activity_id):
         listing = public_query().filter(Activity.id == activity_id).first_or_404()
-        return render_template("activities/public_detail.html", listing=listing)
+        signup_closes = (
+            as_utc(listing.starts_at) - timedelta(
+                minutes=current_app.config["ACTIVITY_REGISTRATION_POLICY"].signup_close_minutes)
+            if listing.starts_at else None
+        )
+        return render_template("activities/public_detail.html", listing=listing, signup_open=(
+            signup_closes is not None and datetime.now(timezone.utc) < signup_closes))
 
     @hub.get("/member/activities")
     @login_required
@@ -367,6 +383,7 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
         if request.method == "POST":
             limit_activity_action()
             # Quota accounting commits its own transaction, so recheck the current row.
+            lock_activity(activity_id)
             activity, _ = member_activity(activity_id, owner_only=True)
             check_version(activity)
             if activity.status == "submitted":
@@ -491,7 +508,9 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
     @hub.post("/admin/community/activities/<int:activity_id>/state/<action>")
     @admin_required
     def review_transition(activity_id, action):
-        activity = db.get_or_404(Activity, activity_id)
+        activity = lock_activity(activity_id)
+        if activity is None:
+            abort(404)
         check_version(activity)
         previous_status = activity.status
         new_status = apply_transition(action, previous_status, REVIEW_TRANSITIONS)
@@ -507,9 +526,15 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
             if activity.classification == "member" and activity.organizer_id == g.current_user.id:
                 abort(403, description="Another administrator must review this member proposal.")
             revision = db.session.get(ActivityRevision, (activity_id, activity.revision_number))
-            if (not revision.starts_at
-                    or revision.starts_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc)):
+            if not revision.starts_at or as_utc(revision.starts_at) <= datetime.now(timezone.utc):
                 abort(409, description="The activity start time has passed.")
+            confirmed = ActivityRegistration.query.filter_by(
+                activity_id=activity_id, status="confirmed").count()
+            if confirmed > int(revision.organizer_details["capacity"]):
+                abort(409, description="The new capacity is lower than the confirmed registrations.")
+            update_registrations_for_activity(activity, "activity_updated")
+        elif action == "unpublish":
+            update_registrations_for_activity(activity, "activity_cancelled")
         activity.status = new_status
         audit(activity, action, previous_status, new_status, note=note or None)
         commit_activity()
@@ -533,3 +558,7 @@ def register_activities(app, *, User, CommunityProfile, MembershipDetails, Membe
         return redirect(url_for(".admin_detail", activity_id=activity_id))
 
     app.register_blueprint(hub)
+    register_registration_routes(
+        app, User=User, organizer_eligible=eligible_organizer, login_required=login_required,
+        admin_required=admin_required, limit_activity_action=limit_activity_action,
+    )

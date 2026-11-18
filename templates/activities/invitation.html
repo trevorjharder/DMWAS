@@ -18,6 +18,9 @@
       {% elif revision %}
       <h2>Approved activity</h2>
       {{ listing_details(revision.public_details, location_label) }}
+      {% if config.ACTIVITY_REGISTRATION_ENABLED %}
+      <a class="button button--secondary" href="{{ url_for('registrations.roster', activity_id=activity.id) }}">Manage roster</a>
+      {% endif %}
       <h2>Private organizer details</h2>
       {{ organizer_details(revision.organizer_details, organizer_fields, modes) }}
       {% else %}

@@ -147,7 +147,11 @@
           %}
           >My activities</a
         >
-        {% endif %} {% if current_user.is_admin %}
+        {% endif %}
+        {% if config.ACTIVITY_REGISTRATION_ENABLED and can_use_activity_registration %}
+        <a href="{{ url_for('registrations.my_registrations') }}" {% if endpoint in ['registrations.my_registrations', 'registrations.notices', 'registrations.enroll'] %}aria-current="page"{% endif %}>My registrations</a>
+        {% endif %}
+        {% if current_user.is_admin %}
         <a
           href="{{ url_for('activities.admin_list') }}"
           {%
@@ -161,6 +165,9 @@
           %}
           >Activity review</a
         >
+        {% if config.ACTIVITY_REGISTRATION_ENABLED %}
+        <a href="{{ url_for('registrations.hours_review') }}" {% if endpoint == 'registrations.hours_review' %}aria-current="page"{% endif %}>Volunteer hours</a>
+        {% endif %}
         <a
           href="{{ url_for('admin_members') }}"
           {%
