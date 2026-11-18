@@ -203,3 +203,23 @@ Validation: **135 tests passed in 74.55 seconds**, with the same five known SQLi
 expression-index warnings. PostgreSQL 18 checks passed for legacy backfill,
 schema drift, highlight access, the shared-record downgrade guard, and safe
 downgrade/re-upgrade. The disposable local PostgreSQL server was stopped.
+
+## Directory wording and sharing controls update
+
+Member-facing labels now use "directory" rather than "adult directory". The
+eligibility policy is unchanged. Verified highlights render below participation
+goals on shared profiles and private previews.
+
+The verified-record form now has one checkbox: **Allow members to share this
+activity**. Saving as an authorized administrator verifies the record; unchecking
+sharing makes it private. The separate verification and sensitive-activity
+checkboxes were removed. Existing legacy verification/sensitivity restrictions
+remain enforced until an administrator edits the record. Such a record shows
+sharing unchecked initially, even if its old shareable flag was set. An explicit
+sharing choice on save is authoritative and clears the old sensitivity flag;
+saving with sharing unchecked keeps it private. Changes remain audited.
+
+This update needs application deployment but no additional database migration.
+Validation: **137 tests passed in 64.91 seconds**, with the same five known SQLite
+expression-index reflection warnings. Coverage includes the single sharing
+control, preservation of older private records, and highlight ordering.

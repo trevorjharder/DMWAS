@@ -49,13 +49,13 @@ Test as B, viewing A's profile.
 
 Open **Verified records** as administrator. Use completed, synthetic activities.
 
-- [ ] Add an activity record for A with a safe summary and past completion date. Check **verified** and **safe to share**: it becomes available for A to select.
+- [ ] Add an activity record for A with a safe summary and past completion date. Check **Allow members to share this activity**: saving verifies the record and makes it available for A to select.
 - [ ] Add one volunteer contribution for A and B together with positive whole minutes: only one record is created, both members appear on the administrator record, and the minutes apply to each member.
 - [ ] Add/remove a participant through the edit form: the member list is saved and previously removed members can no longer select or share that record.
 - [ ] Have both A and B share the same record. Turn off sharing for A: B's highlight remains visible. No public profile exposes the other participant's identity.
-- [ ] Leave **safe to share** unchecked on a record: it is unavailable in A's highlight choices.
-- [ ] Mark a record sensitive, even with **safe to share** checked: it is unavailable for sharing.
-- [ ] Leave verification unchecked: the record is unavailable for sharing.
+- [ ] Leave **Allow members to share this activity** unchecked: the record is unavailable in A's highlight choices.
+- [ ] Confirm only that sharing checkbox appears at the bottom of the form; there are no separate verification or sensitive-activity checkboxes.
+- [ ] An older sensitive or unverified record shows sharing unchecked. Saving it without checking sharing keeps it hidden.
 - [ ] Try a future completion date or invalid volunteer minutes: the form rejects the entry.
 - [ ] As an ordinary member, open `/admin/community/records`: access is denied.
 - [ ] Reject an empty or invalid member list without partially updating the record. Ordinary members cannot change participants.
@@ -70,8 +70,8 @@ Open **Verified records** as administrator. Use completed, synthetic activities.
 - [ ] Deselect one record and save: it disappears while other selections remain.
 - [ ] Try selecting more than ten records: saving is rejected without changing the saved profile.
 - [ ] Turn highlight visibility OFF: all selected highlights disappear from B's view.
-- [ ] Turn it back ON, then revoke a selected record's verification as administrator: it disappears immediately, without A saving again.
-- [ ] Repeat by making a selected record private, then sensitive: it disappears in both cases.
+- [ ] Turn it back ON, then uncheck **Allow members to share this activity** as administrator: it disappears immediately, without A saving again.
+- [ ] Confirm a profile's verified highlights appear below its participation goals, both on the shared profile and in the owner's preview.
 - [ ] Attempt to submit another member's record ID: saving is rejected (covered by automated ownership tests).
 - [ ] Turn directory opt-in OFF: neither profile nor highlights remain accessible to B.
 
@@ -104,7 +104,7 @@ Use B's authenticated session. Find A's numeric ID in the profile URL.
 
 ## 8. Automated checks and acceptance
 
-- [ ] Run `python -m pytest -q`: all tests pass. Shared-record update baseline: **135 passed**, with five known SQLite expression-index reflection warnings.
+- [ ] Run `python -m pytest -q`: all tests pass. The sharing-control update includes checks for highlight placement and older private-record handling.
 - [ ] Run `python scripts/validate_phase05_postgres.py` with local PostgreSQL binaries available: real PostgreSQL filtering, quota and upgrade/downgrade/re-upgrade checks pass, and the temporary server stops. This uses synthetic localhost data, not Railway.
 - [ ] If a live rollback rehearsal is required, use a disposable restored backup and the [recovery instructions](community_hub_phase_05.md#migration-and-recovery). Phase 5 downgrade deletes Phase 5 records, audits and selections; do not try it casually on Testing data you need to retain.
 - [ ] Resolve and retest failures. Record the tested commit and evidence.

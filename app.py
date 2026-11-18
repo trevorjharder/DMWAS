@@ -1377,7 +1377,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             if any(value not in COMMUNITY_PROFILE_GOALS for value in requested_goals):
                 errors.append("Choose participation goals from the provided list.")
             if directory_opt_in and not has_capability(user, Capability.ADULT_DIRECTORY):
-                errors.append("Only active adult members may opt in to the adult directory.")
+                errors.append("Only active adult members may opt in to the directory.")
             photo_upload = request.files.get("photo")
             photo_data = None
             if photo_upload and photo_upload.filename:
@@ -1448,7 +1448,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 ))
             db.session.commit()
             flash(
-                "Profile saved and automatically approved for the adult directory."
+                "Profile saved and automatically approved for the directory."
                 if auto_approve else
                 "Profile saved privately. Directory opt-in is off.",
                 "success",
@@ -1778,9 +1778,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     CommunityProfileHighlight.profile_id.in_(removed_profiles)).delete(synchronize_session=False)
             record.title, record.record_type = title, kind
             record.occurred_on, record.volunteer_minutes = occurred, minutes
-            record.verified = request.form.get("verified") == "yes"
+            record.verified = True
             record.shareable = request.form.get("shareable") == "yes"
-            record.sensitive = request.form.get("sensitive") == "yes"
+            record.sensitive = False
             record.verified_by_id = g.current_user.id
             record.verified_at = datetime.now(timezone.utc)
             db.session.flush()

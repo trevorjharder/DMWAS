@@ -196,7 +196,7 @@ def test_admin_verification_member_selection_and_immediate_revocation(client, ap
     assert b"Verified trail work" in client.get(f"/members/{directory['owner']}/profile").data
     login_as(client, directory["admin"])
     assert client.post("/admin/community/records", data=record_payload(directory, record_id=record_id,
-        verified="")).status_code == 302
+        shareable="")).status_code == 302
     with app.app_context():
         assert VerifiedCommunityRecordAudit.query.count() == 2
     login_as(client, directory["viewer"])
@@ -358,3 +358,48 @@ def test_shared_record_invalid_member_lists_are_atomic(client, app, directory, m
     with app.app_context():
         assert VerifiedCommunityRecord.query.count() == 0
         assert VerifiedCommunityRecordParticipant.query.count() == 0
+
+
+def test_single_sharing_control_preserves_legacy_privacy(client, app, directory):
+    with app.app_context():
+        record = VerifiedCommunityRecord(user_id=directory["owner"], title="Legacy hidden record",
+            record_type="activity", occurred_on=date(2026, 1, 1), verified=True,
+            shareable=True, sensitive=True, verified_by_id=directory["admin"])
+        db.session.add(record)
+        db.session.commit()
+        record_id = record.id
+    login_as(client, directory["admin"])
+    page = client.get("/admin/community/records")
+    assert b"Allow members to share this activity" in page.data
+    assert b'name="verified"' not in page.data
+    assert b'name="sensitive"' not in page.data
+    assert b'name="shareable" value="yes" checked' not in page.data
+    payload = record_payload(directory, record_id=record_id, shareable="")
+    assert client.post("/admin/community/records", data=payload).status_code == 302
+    with app.app_context():
+        record = db.session.get(VerifiedCommunityRecord, record_id)
+        assert record.verified and not record.shareable
+        assert highlight_options(directory["owner"]) == []
+    payload["shareable"] = "yes"
+    assert client.post("/admin/community/records", data=payload).status_code == 302
+    with app.app_context():
+        record = db.session.get(VerifiedCommunityRecord, record_id)
+        assert record.verified and record.shareable and not record.sensitive
+        assert len(highlight_options(directory["owner"])) == 1
+
+
+def test_verified_highlights_follow_goals_in_profile_and_preview(client, app, directory):
+    login_as(client, directory["admin"])
+    client.post("/admin/community/records", data=record_payload(directory))
+    with app.app_context():
+        record_id = VerifiedCommunityRecord.query.one().id
+    login_as(client, directory["owner"])
+    client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Trail Alias",
+        "directory_opt_in": "yes", "show_highlights": "yes", "highlights": str(record_id),
+        "show_goals": "yes", "participation_goals": "Join Society activities"})
+    for path in ("/member/profile/preview", f"/members/{directory['owner']}/profile"):
+        page = client.get(path)
+        assert page.status_code == 200
+        assert page.data.index(b"Participation goals") < page.data.index(b"Verified highlights")
+        assert b"adult directory" not in page.data.lower()
+    assert b"adult member directory" not in client.get("/members/search").data.lower()

@@ -8,16 +8,15 @@
   {% if profile %}
   <article class="community-profile-card">
     {% if not eligible %}
-    <p class="hub-status hub-status--paused">Private — adult directory eligibility is required</p>
+    <p class="hub-status hub-status--paused">Private — directory eligibility is required</p>
     {% elif profile.directory_opt_in and profile.status == 'approved' %}
-    <p class="hub-status">Approved for adult directory</p>
+    <p class="hub-status">Approved for directory</p>
     {% elif profile.directory_opt_in %}
     <p class="hub-status hub-status--paused">Hidden until administrator approval</p>
     {% else %}
     <p class="hub-status hub-status--paused">Private — directory opt-in is off</p>
     {% endif %}
     <h2>{{ profile.display_name }}</h2>
-    {% include "profile_highlights.html" %}
     {% if public_fields.photo_url %}<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Your profile photo" width="128" height="128" />{% endif %}
     {% if public_fields.biography %}
     <section><h3>About</h3><p>{{ public_fields.biography }}</p></section>
@@ -31,6 +30,7 @@
     {% if public_fields.goals %}
     <section><h3>Participation goals</h3><ul>{% for goal in public_fields.goals %}<li>{{ goal }}</li>{% endfor %}</ul></section>
     {% endif %}
+    {% include "profile_highlights.html" %}
     {% if public_fields|length == 1 %}
     <p class="form-hint">Only your display name is selected for visibility.</p>
     {% endif %}

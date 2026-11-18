@@ -934,4 +934,30 @@ h3 {
 .directory-filters input, .directory-filters select, .verified-record-form input:not([type="checkbox"]), .verified-record-form select { width: 100%; padding: .65rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 .directory-pagination { display: flex; gap: 1.5rem; flex-wrap: wrap; margin: 1.5rem 0; }
 .verified-record-form { max-width: 650px; padding: 1rem 0; }
+.record-member-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.record-member-picker legend { padding: 0; }
+.record-member-picker__options {
+  max-height: 15rem;
+  overflow-y: auto;
+  margin-top: .5rem;
+  padding: .25rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.verified-record-form .record-member-picker__option {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  margin: 0;
+  padding: .35rem .25rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.record-member-picker__option input { flex: none; margin: 0; }
 .community-profile-card { overflow-wrap: anywhere; }
