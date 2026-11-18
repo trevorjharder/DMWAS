@@ -12,8 +12,9 @@
   <div class="auth-card auth-card--wide">
     {% if profile %}
     <p class="profile-review-status">
-      Profile status: <strong>{{ profile.status|capitalize }}</strong>
-      {% if profile.moderation_note %}<br />Reviewer note: {{ profile.moderation_note }}{% endif %}
+      Profile status: <strong>{{ profile.status|capitalize }}</strong> {% if
+      profile.moderation_note %}<br />Reviewer note: {{ profile.moderation_note
+      }}{% endif %}
     </p>
     {% endif %}
     <form method="post">
@@ -22,11 +23,18 @@
         name="csrf_token"
         value="{{ session.get('csrf_token', '') }}"
       />
-      {% set directory_checked = (request.form.get('directory_opt_in') == 'yes') if request.method == 'POST' else (profile.directory_opt_in if profile else false) %}
-      {% set biography_checked = (request.form.get('show_biography') == 'yes') if request.method == 'POST' else (profile.show_biography if profile else false) %}
-      {% set community_checked = (request.form.get('show_community') == 'yes') if request.method == 'POST' else (profile.show_community if profile else false) %}
-      {% set interests_checked = (request.form.get('show_interests') == 'yes') if request.method == 'POST' else (profile.show_interests if profile else false) %}
-      {% set goals_checked = (request.form.get('show_goals') == 'yes') if request.method == 'POST' else (profile.show_goals if profile else false) %}
+      {% set directory_checked = (request.form.get('directory_opt_in') == 'yes')
+      if request.method == 'POST' else (profile.directory_opt_in if profile else
+      false) %} {% set biography_checked = (request.form.get('show_biography')
+      == 'yes') if request.method == 'POST' else (profile.show_biography if
+      profile else false) %} {% set community_checked =
+      (request.form.get('show_community') == 'yes') if request.method == 'POST'
+      else (profile.show_community if profile else false) %} {% set
+      interests_checked = (request.form.get('show_interests') == 'yes') if
+      request.method == 'POST' else (profile.show_interests if profile else
+      false) %} {% set goals_checked = (request.form.get('show_goals') == 'yes')
+      if request.method == 'POST' else (profile.show_goals if profile else
+      false) %}
 
       <label for="display_name">Display name</label>
       <input
@@ -36,10 +44,15 @@
         required
         value="{{ request.form.get('display_name', profile.display_name if profile else '') }}"
       />
-      <p class="form-hint">This is the name shown to directory members if your profile is approved and you opt in.</p>
+      <p class="form-hint">
+        This is the name shown to directory members if your profile is approved
+        and you opt in.
+      </p>
 
       <label for="biography">Short biography</label>
-      <textarea id="biography" name="biography" maxlength="500" rows="4">{{ request.form.get('biography', profile.biography if profile else '') }}</textarea>
+      <textarea id="biography" name="biography" maxlength="500" rows="4">
+{{ request.form.get('biography', profile.biography if profile else '') }}</textarea
+      >
 
       <label for="general_community">General community or area</label>
       <input
@@ -48,26 +61,40 @@
         maxlength="120"
         value="{{ request.form.get('general_community', profile.general_community if profile else '') }}"
       />
-      <p class="form-hint">Use a broad area only; do not enter a street address.</p>
+      <p class="form-hint">
+        Use a broad area only; do not enter a street address.
+      </p>
 
-      {% set selected_interests = request.form.getlist('interests') if request.method == 'POST' else (profile.interests if profile else []) %}
+      {% set selected_interests = request.form.getlist('interests') if
+      request.method == 'POST' else (profile.interests if profile else []) %}
       <fieldset class="form-options">
         <legend>Interests</legend>
-        <p class="form-hint">Choose any that you want included in your profile.</p>
+        <p class="form-hint">
+          Choose any that you want included in your profile.
+        </p>
         {% for interest in interests %}
         <label class="check-label">
           <input
             type="checkbox"
             name="interests"
             value="{{ interest }}"
-            {% if interest in selected_interests %}checked{% endif %}
+            {%
+            if
+            interest
+            in
+            selected_interests
+            %}checked{%
+            endif
+            %}
           />
           {{ interest }}
         </label>
         {% endfor %}
       </fieldset>
 
-      {% set selected_goals = request.form.getlist('participation_goals') if request.method == 'POST' else (profile.participation_goals if profile else []) %}
+      {% set selected_goals = request.form.getlist('participation_goals') if
+      request.method == 'POST' else (profile.participation_goals if profile else
+      []) %}
       <fieldset class="form-options">
         <legend>Participation goals</legend>
         {% for goal in goals %}
@@ -76,7 +103,14 @@
             type="checkbox"
             name="participation_goals"
             value="{{ goal }}"
-            {% if goal in selected_goals %}checked{% endif %}
+            {%
+            if
+            goal
+            in
+            selected_goals
+            %}checked{%
+            endif
+            %}
           />
           {{ goal }}
         </label>
@@ -94,24 +128,70 @@
           type="checkbox"
           name="directory_opt_in"
           value="yes"
-          {% if directory_checked %}checked{% endif %}
+          {%
+          if
+          directory_checked
+          %}checked{%
+          endif
+          %}
         />
-        I want my display name to appear in the adult member directory after review.
+        I want my display name to appear in the adult member directory after
+        review.
       </label>
       <label class="check-label">
-        <input type="checkbox" name="show_biography" value="yes" {% if biography_checked %}checked{% endif %} />
+        <input
+          type="checkbox"
+          name="show_biography"
+          value="yes"
+          {%
+          if
+          biography_checked
+          %}checked{%
+          endif
+          %}
+        />
         Show my biography
       </label>
       <label class="check-label">
-        <input type="checkbox" name="show_community" value="yes" {% if community_checked %}checked{% endif %} />
+        <input
+          type="checkbox"
+          name="show_community"
+          value="yes"
+          {%
+          if
+          community_checked
+          %}checked{%
+          endif
+          %}
+        />
         Show my general community or area
       </label>
       <label class="check-label">
-        <input type="checkbox" name="show_interests" value="yes" {% if interests_checked %}checked{% endif %} />
+        <input
+          type="checkbox"
+          name="show_interests"
+          value="yes"
+          {%
+          if
+          interests_checked
+          %}checked{%
+          endif
+          %}
+        />
         Show my interests
       </label>
       <label class="check-label">
-        <input type="checkbox" name="show_goals" value="yes" {% if goals_checked %}checked{% endif %} />
+        <input
+          type="checkbox"
+          name="show_goals"
+          value="yes"
+          {%
+          if
+          goals_checked
+          %}checked{%
+          endif
+          %}
+        />
         Show my participation goals
       </label>
 
@@ -120,8 +200,14 @@
         approved image storage and moderation.
       </p>
       <div class="profile-form-actions">
-        <button class="button button--primary" type="submit">Save profile</button>
-        <a class="button button--secondary" href="{{ url_for('member_profile_preview') }}">Preview saved profile</a>
+        <button class="button button--primary" type="submit">
+          Save profile
+        </button>
+        <a
+          class="button button--secondary"
+          href="{{ url_for('member_profile_preview') }}"
+          >Preview saved profile</a
+        >
       </div>
     </form>
   </div>

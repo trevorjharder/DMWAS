@@ -10,24 +10,42 @@
     {% if profile.directory_opt_in and profile.status == 'approved' %}
     <p class="hub-status">Approved for adult directory</p>
     {% elif profile.directory_opt_in %}
-    <p class="hub-status hub-status--paused">Hidden until administrator approval</p>
+    <p class="hub-status hub-status--paused">
+      Hidden until administrator approval
+    </p>
     {% else %}
-    <p class="hub-status hub-status--paused">Private — directory opt-in is off</p>
+    <p class="hub-status hub-status--paused">
+      Private — directory opt-in is off
+    </p>
     {% endif %}
     <h2>{{ profile.display_name }}</h2>
     {% if profile.show_biography and profile.biography %}
-    <section><h3>About</h3><p>{{ profile.biography }}</p></section>
-    {% endif %}
-    {% if profile.show_community and profile.general_community %}
+    <section>
+      <h3>About</h3>
+      <p>{{ profile.biography }}</p>
+    </section>
+    {% endif %} {% if profile.show_community and profile.general_community %}
     <p><strong>Area:</strong> {{ profile.general_community }}</p>
-    {% endif %}
-    {% if profile.show_interests and profile.interests %}
-    <section><h3>Interests</h3><ul>{% for interest in profile.interests %}<li>{{ interest }}</li>{% endfor %}</ul></section>
-    {% endif %}
-    {% if profile.show_goals and profile.participation_goals %}
-    <section><h3>Participation goals</h3><ul>{% for goal in profile.participation_goals %}<li>{{ goal }}</li>{% endfor %}</ul></section>
-    {% endif %}
-    {% if not (profile.show_biography or profile.show_community or profile.show_interests or profile.show_goals) %}
+    {% endif %} {% if profile.show_interests and profile.interests %}
+    <section>
+      <h3>Interests</h3>
+      <ul>
+        {% for interest in profile.interests %}
+        <li>{{ interest }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %} {% if profile.show_goals and profile.participation_goals %}
+    <section>
+      <h3>Participation goals</h3>
+      <ul>
+        {% for goal in profile.participation_goals %}
+        <li>{{ goal }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %} {% if not (profile.show_biography or profile.show_community or
+    profile.show_interests or profile.show_goals) %}
     <p class="form-hint">Only your display name is selected for visibility.</p>
     {% endif %}
   </article>
@@ -38,7 +56,9 @@
   </section>
   {% endif %}
   <p class="profile-preview-actions">
-    <a class="button button--primary" href="{{ url_for('member_profile') }}">Edit profile</a>
+    <a class="button button--primary" href="{{ url_for('member_profile') }}"
+      >Edit profile</a
+    >
     <a href="{{ url_for('member_home') }}">Back to member hub</a>
   </p>
 </section>

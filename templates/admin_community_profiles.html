@@ -2,7 +2,9 @@
 <section class="page-heading">
   <p class="eyebrow">Administration</p>
   <h1>Community profile review</h1>
-  <p>Only profiles with explicit adult-member opt-in are shown in this queue.</p>
+  <p>
+    Only profiles with explicit adult-member opt-in are shown in this queue.
+  </p>
 </section>
 {% if profiles %}
 <section class="request-list">
@@ -10,30 +12,70 @@
   <article class="request-card">
     <div class="community-profile-review">
       <h2>{{ profile.display_name }}</h2>
-      <p class="form-hint">Member number {{ profile.user.member_number }} · submitted {{ profile.updated_at.strftime('%Y-%m-%d') }}</p>
-      {% if profile.biography %}<p>{{ profile.biography }}</p>{% endif %}
-      {% if profile.general_community %}<p>General area: {{ profile.general_community }}</p>{% endif %}
-      {% if profile.interests %}<p>Interests: {{ profile.interests|join(', ') }}</p>{% endif %}
-      {% if profile.participation_goals %}<p>Goals: {{ profile.participation_goals|join(', ') }}</p>{% endif %}
+      <p class="form-hint">
+        Member number {{ profile.user.member_number }} · submitted {{
+        profile.updated_at.strftime('%Y-%m-%d') }}
+      </p>
+      {% if profile.biography %}
+      <p>{{ profile.biography }}</p>
+      {% endif %} {% if profile.general_community %}
+      <p>General area: {{ profile.general_community }}</p>
+      {% endif %} {% if profile.interests %}
+      <p>Interests: {{ profile.interests|join(', ') }}</p>
+      {% endif %} {% if profile.participation_goals %}
+      <p>Goals: {{ profile.participation_goals|join(', ') }}</p>
+      {% endif %}
       <ul class="profile-visibility-summary">
-        <li>Biography: {{ 'visible' if profile.show_biography else 'hidden' }}</li>
+        <li>
+          Biography: {{ 'visible' if profile.show_biography else 'hidden' }}
+        </li>
         <li>Area: {{ 'visible' if profile.show_community else 'hidden' }}</li>
-        <li>Interests: {{ 'visible' if profile.show_interests else 'hidden' }}</li>
+        <li>
+          Interests: {{ 'visible' if profile.show_interests else 'hidden' }}
+        </li>
         <li>Goals: {{ 'visible' if profile.show_goals else 'hidden' }}</li>
       </ul>
     </div>
     <div class="request-actions">
-      <form method="post" action="{{ url_for('moderate_community_profile', profile_id=profile.id, action='approve') }}">
-        <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
-        <label for="approve-note-{{ profile.id }}">Optional reviewer note</label>
-        <input id="approve-note-{{ profile.id }}" name="moderation_note" maxlength="500" />
-        <button class="button button--primary" type="submit">Approve profile</button>
+      <form
+        method="post"
+        action="{{ url_for('moderate_community_profile', profile_id=profile.id, action='approve') }}"
+      >
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ session.get('csrf_token', '') }}"
+        />
+        <label for="approve-note-{{ profile.id }}"
+          >Optional reviewer note</label
+        >
+        <input
+          id="approve-note-{{ profile.id }}"
+          name="moderation_note"
+          maxlength="500"
+        />
+        <button class="button button--primary" type="submit">
+          Approve profile
+        </button>
       </form>
-      <form method="post" action="{{ url_for('moderate_community_profile', profile_id=profile.id, action='reject') }}">
-        <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+      <form
+        method="post"
+        action="{{ url_for('moderate_community_profile', profile_id=profile.id, action='reject') }}"
+      >
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ session.get('csrf_token', '') }}"
+        />
         <label for="reject-note-{{ profile.id }}">Reason or feedback</label>
-        <input id="reject-note-{{ profile.id }}" name="moderation_note" maxlength="500" />
-        <button class="button button--danger" type="submit">Reject profile</button>
+        <input
+          id="reject-note-{{ profile.id }}"
+          name="moderation_note"
+          maxlength="500"
+        />
+        <button class="button button--danger" type="submit">
+          Reject profile
+        </button>
       </form>
     </div>
   </article>
@@ -41,5 +83,4 @@
 </section>
 {% else %}
 <section class="empty-state"><h2>No profiles awaiting review</h2></section>
-{% endif %}
-{% endblock %}
+{% endif %} {% endblock %}

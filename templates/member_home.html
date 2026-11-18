@@ -83,11 +83,17 @@
       <article class="hub-card">
         <div class="hub-card__topline">
           <h3>Community profile</h3>
-          <span class="hub-status {% if community_profile and community_profile.status != 'approved' %}hub-status--paused{% endif %}">
-            {{ community_profile.status|capitalize if community_profile else 'Not created' }}
+          <span
+            class="hub-status {% if community_profile and community_profile.status != 'approved' %}hub-status--paused{% endif %}"
+          >
+            {{ community_profile.status|capitalize if community_profile else
+            'Not created' }}
           </span>
         </div>
-        <p>Choose your display name and control exactly what adult directory members can see.</p>
+        <p>
+          Choose your display name and control exactly what adult directory
+          members can see.
+        </p>
         <a class="hub-card__link" href="{{ url_for('member_profile') }}">
           Edit profile and privacy <span aria-hidden="true">→</span>
         </a>
@@ -119,9 +125,17 @@
         <div class="hub-card__topline">
           <h3>Activities</h3>
         </div>
-        <p><a class="hub-card__link" href="{{ url_for('activities.public_list') }}">Browse activities</a></p>
+        <p>
+          <a
+            class="hub-card__link"
+            href="{{ url_for('activities.public_list') }}"
+            >Browse activities</a
+          >
+        </p>
         {% if can_use_activity_workspace %}
-        <a class="hub-card__link" href="{{ url_for('activities.member_list') }}">Manage proposals and invitations</a>
+        <a class="hub-card__link" href="{{ url_for('activities.member_list') }}"
+          >Manage proposals and invitations</a
+        >
         {% endif %}
       </article>
 
