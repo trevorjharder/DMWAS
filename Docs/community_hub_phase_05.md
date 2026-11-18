@@ -97,8 +97,9 @@ python -m flask --app app db upgrade && exec gunicorn --workers 2 --threads 4 --
 
 Do not stamp `head` to work around a missing table. The Phase 04 repair already
 adopted the existing Testing baseline; verify that remains true rather than
-repeating baseline adoption blindly. This task did not modify Railway settings,
-open database endpoints, migrate a live database or deploy the application.
+repeating baseline adoption blindly. The initial implementation did not modify
+Railway settings or migrate a live database. The subsequent Testing repair below
+records the later database and startup-command changes.
 
 To roll back: stop Phase 05 traffic, preserve a backup of verified sources/audits
 and member selections, run `python -m flask --app app db downgrade c04f1a2b3d4e`,
@@ -140,3 +141,27 @@ python scripts/validate_phase05_postgres.py
 deployed browser/mobile review and deployment acceptance remain outstanding.
 The Society's privacy/retention and staffing sign-offs still apply before public
 launch. Phase 06 is the next phase and is not implemented here.
+
+## Subsequent Testing repair
+
+After the Phase 05 application was deployed without its migration, `/member`
+failed because `community_profile.show_highlights` was missing. The existing
+Testing web service and database reference were verified; the database was on
+`c04f1a2b3d4e` and matched the expected pre-Phase-05 schema.
+
+A fresh custom-format PostgreSQL backup was saved under the gitignored path
+`instance/backups/testing-before-phase05-20261118T032201Z.dump` (67,730 bytes;
+SHA-256 `5282d3ac5a6531e457124e39daef03d275d153b469255b02afcd040c0623b077`).
+The backup archive listing was validated. The database was upgraded to
+`d05a1b2c3d4e`; PostgreSQL drift checking passed and existing record counts were
+unchanged. Read-only application checks against Testing returned 200 for
+`/member` and `/member/profile/preview`.
+
+The previously approved temporary Testing database endpoint was removed, and its
+proxy list was confirmed empty. An environment-specific configuration patch then
+set Testing's web Start Command to the migration-first command above, with
+`skipDeploys: true`. The saved command was verified afterward, and Production's
+web Start Command was confirmed unchanged. No deployment or Production database
+change was performed. The existing running Testing application can use the
+repaired schema immediately; the saved startup command applies on future starts
+using that configuration. A full backup restore rehearsal remains outstanding.
