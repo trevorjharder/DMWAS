@@ -1,26 +1,44 @@
-{% extends "base.html" %} {% block content %}
-<section class="hero">
-  <p class="eyebrow">Outdoor access · Education · Stewardship</p>
-  <h1>Access to the outdoors in the Mount Waddington region</h1>
-  <p class="hero__intro">
-    The District of Mount Waddington Access Society is a society focused on
-    improving access to hiking, climbing, and mountaineering opportunities in
-    the region.
-  </p>
-  <div class="hero__actions">
-    <a class="button button--primary" href="{{ url_for('notices') }}"
-      >View notices</a
-    >
-    <a class="button button--secondary" href="{{ url_for('contact') }}"
-      >Contact the Society</a
-    >
+{% extends "base.html" %}
+{% block content %}
+<section class="about-hero" aria-labelledby="about-heading">
+  <picture class="about-hero__photo">
+    <source
+      media="(max-width: 760px)"
+      srcset="{{ url_for('static', filename='about/snow-saddle-panorama-mobile.webp') }}"
+    />
+    <img
+      src="{{ url_for('static', filename='about/snow-saddle-panorama.webp') }}"
+      srcset="{{ url_for('static', filename='about/snow-saddle-panorama-medium.webp') }} 1440w,
+              {{ url_for('static', filename='about/snow-saddle-panorama.webp') }} 2200w"
+      sizes="100vw"
+      width="2200"
+      height="1467"
+      fetchpriority="high"
+      alt="Layers of blue mountain ridges beneath a cloud bank, seen from Snow Saddle"
+    />
+  </picture>
+  <div class="about-hero__inner">
+    <p class="eyebrow">Outdoor access · Education · Stewardship</p>
+    <h1 id="about-heading">Access to the outdoors in the Mount Waddington region</h1>
+    <p class="about-hero__intro">
+      The District of Mount Waddington Access Society works to improve access to
+      hiking, climbing, and mountaineering opportunities in the region.
+    </p>
+    <div class="about-hero__actions">
+      <a class="button button--primary" href="{{ url_for('notices') }}">View notices</a>
+      <a class="button button--secondary" href="{{ url_for('contact') }}">Contact the Society</a>
+    </div>
   </div>
 </section>
 
-<section class="content-section" aria-labelledby="purposes-heading">
-  <p class="eyebrow">Our purposes</p>
-  <h2 id="purposes-heading">Supporting responsible outdoor recreation</h2>
-  <p>The Society's constitution describes these purposes:</p>
+<section class="content-section about-purposes" aria-labelledby="purposes-heading">
+  <header class="about-purposes__heading">
+    <div>
+      <p class="eyebrow">Our purposes</p>
+      <h2 id="purposes-heading">Supporting responsible outdoor recreation</h2>
+    </div>
+    <p>The Society’s constitution sets out these six purposes.</p>
+  </header>
   <div class="purpose-grid">
     <article class="purpose-card">
       <h3>Access and trails</h3>
@@ -68,6 +86,38 @@
         people who intend to contribute to the Mount Waddington region.
       </p>
     </article>
+  </div>
+</section>
+
+<section class="about-gallery" aria-labelledby="gallery-heading">
+  <div class="content-section about-gallery__inner">
+    <h2 id="gallery-heading">Around the region</h2>
+    {% set photos = [
+      ('snow-saddle-ridge', 'Snow Saddle', 'A rugged, forested peak with a patch of snow below its cliffs'),
+      ('bauza-climbing', 'Climbing at Bauza', 'A roped climber on a rock face with a group gathered below'),
+      ('mount-st-patrick-hikers', 'Mount St. Patrick', 'A group of hikers looks out from a foggy ridge'),
+      ('mount-st-patrick-coast', 'Mist over the coast', 'Surf breaks around a rocky island below a forested headland'),
+      ('alpine-basin', 'Alpine basin', 'A hiker crosses a rock slope below jagged peaks'),
+      ('rocky-summit', 'Rocky summit', 'Two people spread their arms at the top of a rocky spire'),
+      ('sutton-peak-lookout', 'View from Sutton Peak', 'Two hikers stand on a rocky lookout above layers of mountains'),
+      ('sutton-peak-hiker', 'Hiking at Sutton Peak', 'A hiker with a backpack faces a steep mountain ridge')
+    ] %}
+    <ul class="about-gallery__grid" role="list">
+      {% for name, caption, description in photos %}
+      <li>
+        <a class="about-gallery__link" href="{{ url_for('static', filename='about/' ~ name ~ '.webp') }}">
+          <img
+            class="about-gallery__image"
+            src="{{ url_for('static', filename='about/' ~ name ~ '-thumb.webp') }}"
+            alt="{{ description }}"
+            loading="lazy"
+            decoding="async"
+          />
+          <span class="about-gallery__caption">{{ caption }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
   </div>
 </section>
 {% endblock %}
