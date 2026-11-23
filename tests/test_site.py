@@ -95,6 +95,24 @@ def test_public_pages_render(client):
         assert b"District of Mount Waddington" in response.data
 
 
+def test_about_hides_member_navigation_for_signed_in_users(app, client, make_user):
+    with app.app_context():
+        admin = make_user(is_admin=True)
+        db.session.add(admin)
+        db.session.commit()
+        admin_id = admin.id
+
+    login_as(client, admin_id)
+    about = client.get("/", follow_redirects=True)
+    assert about.status_code == 200
+    assert b"Sign out" in about.data
+    assert b'aria-label="Member navigation"' not in about.data
+
+    member_area = client.get("/member")
+    assert member_area.status_code == 200
+    assert b'aria-label="Member navigation"' in member_area.data
+
+
 def test_donate_page_shows_etransfer_email_and_equipment_contact_note(client):
     response = client.get("/donate")
 

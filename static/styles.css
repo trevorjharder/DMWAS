@@ -284,6 +284,14 @@ h3 {
   gap: clamp(3rem, 7vw, 6.5rem);
   padding-block: clamp(3rem, 7vw, 6.5rem);
 }
+.about-pillars__closing {
+  max-width: 52ch;
+  margin: 0 auto;
+  color: var(--forest-dark);
+  font-size: clamp(1.2rem, 2.4vw, 1.65rem);
+  text-align: center;
+  text-wrap: balance;
+}
 .about-pillar {
   --pillar-overlap: clamp(1.75rem, 4vw, 3.75rem);
   --pillar-inset: clamp(1.5rem, 4.5vw, 4rem);
