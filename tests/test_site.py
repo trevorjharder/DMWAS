@@ -127,12 +127,20 @@ def test_contact_uses_configured_public_email(client):
     assert b"hello@example.test" in response.data
 
 
-def test_contact_page_has_message_form_and_csrf(client):
+def test_contact_page_has_message_form_and_csrf(app, client):
+    app.config.update(
+        PUBLIC_CONTACT_EMAIL=None,
+        PUBLIC_CONTACT_PHONE=None,
+        PUBLIC_CONTACT_ADDRESS=None,
+    )
     response = client.get("/contact")
 
     assert response.status_code == 200
-    assert b"Send us a message" in response.data
-    assert b"inquiries@accessni.ca" in response.data
+    assert b">Send us a message</h2>" in response.data
+    assert b"snow-saddle-panorama-mobile.webp" in response.data
+    assert b'src="/static/about/snow-saddle-panorama.webp"' in response.data
+    assert b'class="contact-card"' not in response.data
+    assert b"Messages go to inquiries@accessni.ca" not in response.data
     assert b'name="csrf_token"' in response.data
     assert b'name="message"' in response.data
 

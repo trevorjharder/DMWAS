@@ -903,9 +903,21 @@ h3 {
   background: #fff3d8;
   color: #735417;
 }
+.contact-hero {
+  align-items: center;
+  min-height: clamp(19rem, 36vw, 30rem);
+  text-align: center;
+}
+.contact-hero::before {
+  background: linear-gradient(0deg, rgb(9 24 27 / 85%), rgb(9 24 27 / 55%));
+}
+.contact-hero h1,
+.contact-hero .about-hero__intro {
+  margin-inline: auto;
+}
 .contact-card {
   max-width: 700px;
-  margin-bottom: 4rem;
+  margin-top: 2rem;
 }
 .contact-card p {
   margin: 0.25rem 0 1.3rem;
@@ -976,6 +988,9 @@ h3 {
   outline: 3px solid #9fc2b3;
   outline-offset: 1px;
   border-color: var(--forest);
+}
+.contact-form__heading {
+  text-align: center;
 }
 .contact-form__trap {
   position: absolute;

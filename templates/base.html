@@ -30,6 +30,7 @@
       <nav class="site-nav" aria-label="Main navigation">
         <a href="{{ url_for('about') }}">About</a>
         <a href="{{ url_for('notices') }}">Notices</a>
+        {% if current_user %}
         <a
           href="{{ url_for('activities.public_list') }}"
           {%
@@ -43,6 +44,7 @@
           %}
           >Activities</a
         >
+        {% endif %}
         <a href="{{ url_for('contact') }}">Contact</a>
         <a href="{{ url_for('donate') }}">Donate</a>
         {% if current_user and (session.get('renewal_only') or can_read_messages)

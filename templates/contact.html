@@ -1,9 +1,16 @@
 {% extends "base.html" %} {% block content %}
-<section class="page-heading">
-  <p class="eyebrow">Get in touch</p>
-  <h1>Contact the Society</h1>
-  <p>Send us a message about the Society, outdoor access, or our activities.</p>
+<section class="about-hero contact-hero" aria-labelledby="contact-heading">
+  {% include "snow_saddle_panorama.html" %}
+  <div class="about-hero__inner">
+    <p class="eyebrow">Get in touch</p>
+    <h1 id="contact-heading">Contact the Society</h1>
+    <p class="about-hero__intro">
+      Send us a message about the Society, outdoor access, or our activities.
+    </p>
+  </div>
 </section>
+{% if config.PUBLIC_CONTACT_EMAIL or config.PUBLIC_CONTACT_PHONE or
+config.PUBLIC_CONTACT_ADDRESS %}
 <section class="contact-card">
   {% if config.PUBLIC_CONTACT_EMAIL %}
   <p>
@@ -24,18 +31,12 @@
     {% for line in config.PUBLIC_CONTACT_ADDRESS.splitlines() %}{{ line }}{% if
     not loop.last %}<br />{% endif %}{% endfor %}
   </p>
-  {% endif %} {% if not config.PUBLIC_CONTACT_EMAIL and not
-  config.PUBLIC_CONTACT_PHONE and not config.PUBLIC_CONTACT_ADDRESS %}
-  <p>You can contact the Society using the message form below.</p>
   {% endif %}
 </section>
+{% endif %}
 <section class="auth-layout">
   <div class="auth-card auth-card--wide">
-    <h2>Send us a message</h2>
-    <p>
-      Messages go to inquiries@accessni.ca. We’ll use your email address only to
-      reply.
-    </p>
+    <h2 class="contact-form__heading">Send us a message</h2>
     <form method="post" action="{{ url_for('contact') }}">
       <input
         type="hidden"
