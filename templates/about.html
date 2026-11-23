@@ -1,4 +1,18 @@
 {% extends "base.html" %}
+
+{% macro pillar_photo(name, description, thumbnail_width=720, photo_width=1600) %}
+  <img
+    class="about-pillar__photo"
+    src="{{ url_for('static', filename='about/' ~ name ~ '.webp') }}"
+    srcset="{{ url_for('static', filename='about/' ~ name ~ '-thumb.webp') }} {{ thumbnail_width }}w,
+            {{ url_for('static', filename='about/' ~ name ~ '.webp') }} {{ photo_width }}w"
+    sizes="(max-width: 760px) calc(100vw - 40px), (max-width: 1160px) 50vw, 600px"
+    alt="{{ description }}"
+    loading="lazy"
+    decoding="async"
+  />
+{% endmacro %}
+
 {% block content %}
 <section class="about-hero" aria-labelledby="about-heading">
   <picture class="about-hero__photo">
@@ -18,7 +32,7 @@
     />
   </picture>
   <div class="about-hero__inner">
-    <p class="eyebrow">Outdoor access · Education · Stewardship</p>
+    <p class="eyebrow">Community · Education · Stewardship · Conservation</p>
     <h1 id="about-heading">Access to the outdoors in the Mount Waddington region</h1>
     <p class="about-hero__intro">
       The District of Mount Waddington Access Society works to improve access to
@@ -31,62 +45,64 @@
   </div>
 </section>
 
-<section class="content-section about-purposes" aria-labelledby="purposes-heading">
-  <header class="about-purposes__heading">
-    <div>
-      <p class="eyebrow">Our purposes</p>
-      <h2 id="purposes-heading">Supporting responsible outdoor recreation</h2>
+<section class="content-section about-pillars" aria-label="Society pillars">
+  <article class="about-pillar" aria-labelledby="community-heading">
+    <div class="about-pillar__content">
+      <h2 id="community-heading">Community</h2>
+      <p>
+        Hiking, climbing, and mountaineering bring people together. We support
+        community climbing facilities and outdoor programs, encourage volunteering,
+        and work to reduce barriers to getting outdoors.
+      </p>
+      <p>
+        We work with landowners, governments, and local organizations to make
+        outdoor recreation more accessible across the Mount Waddington region.
+      </p>
     </div>
-    <p>The Society’s constitution sets out these six purposes.</p>
-  </header>
-  <div class="purpose-grid">
-    <article class="purpose-card">
-      <h3>Access and trails</h3>
+    {{ pillar_photo('mount-st-patrick-hikers', 'A group of hikers looks out from a foggy ridge on Mount St. Patrick') }}
+  </article>
+
+  <article class="about-pillar" aria-labelledby="education-heading">
+    <div class="about-pillar__content">
+      <h2 id="education-heading">Education</h2>
       <p>
-        Promote, develop, improve, and maintain public access to hiking,
-        climbing, and mountaineering opportunities, including trails, wilderness
-        access routes, and climbing areas.
+        We promote outdoor education and responsible recreation. We share local
+        knowledge of trails, wilderness terrain, and access routes with organizations
+        and authorities that support community safety and emergency preparedness.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Facilities and programs</h3>
       <p>
-        Support community climbing facilities, recreational programs, and
-        infrastructure that facilitate safe and responsible outdoor recreation.
+        We aim to support scholarships, grants, and financial assistance for people
+        pursuing education in outdoor recreation, guiding, tourism, and related fields,
+        especially those who plan to contribute to the region.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Education and stewardship</h3>
+    </div>
+    {{ pillar_photo('bauza-climbing', 'A roped climber on the rock face at Bauza with a group gathered below') }}
+  </article>
+
+  <article class="about-pillar" aria-labelledby="stewardship-heading">
+    <div class="about-pillar__content">
+      <h2 id="stewardship-heading">Stewardship</h2>
       <p>
-        Promote outdoor education, responsible recreation, conservation, and
-        stewardship of natural areas.
+        We work to develop, improve, and maintain public access to trails,
+        wilderness routes, and climbing areas. We support infrastructure that helps
+        people reach and use these places safely and responsibly.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Community participation</h3>
+    </div>
+    {{ pillar_photo('sutton-peak-lookout', 'Two hikers stand on a rocky lookout at Sutton Peak above layers of mountains') }}
+  </article>
+
+  <article class="about-pillar" aria-labelledby="conservation-heading">
+    <div class="about-pillar__content">
+      <h2 id="conservation-heading">Conservation</h2>
       <p>
-        Encourage volunteering, reduce barriers to outdoor recreation, and
-        cooperate with governments, landowners, organizations, and other
-        stakeholders.
+        We promote conservation of natural areas across the Mount Waddington region.
+        We encourage choices that protect the forests, alpine areas, and coastlines
+        people come to explore, from staying on established routes where possible
+        to giving wildlife space.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Local knowledge and safety</h3>
-      <p>
-        Support community safety and emergency preparedness by sharing local
-        knowledge about wilderness terrain, trails, and access routes with
-        appropriate organizations and authorities.
-      </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Education support</h3>
-      <p>
-        Support scholarships, grants, and financial assistance for outdoor
-        recreation, guiding, tourism, and related education, with an emphasis on
-        people who intend to contribute to the Mount Waddington region.
-      </p>
-    </article>
-  </div>
+    </div>
+    {{ pillar_photo('mount-st-patrick-coast', 'Mist drifts over a forested headland and a rocky shoreline', 480, 1067) }}
+  </article>
 </section>
 
 <section class="about-gallery" aria-labelledby="gallery-heading">
@@ -100,7 +116,8 @@
       ('alpine-basin', 'Alpine basin', 'A hiker crosses a rock slope below jagged peaks'),
       ('rocky-summit', 'Rocky summit', 'Two people spread their arms at the top of a rocky spire'),
       ('sutton-peak-lookout', 'View from Sutton Peak', 'Two hikers stand on a rocky lookout above layers of mountains'),
-      ('sutton-peak-hiker', 'Hiking at Sutton Peak', 'A hiker with a backpack faces a steep mountain ridge')
+      ('sutton-peak-hiker', 'Hiking at Sutton Peak', 'A hiker with a backpack faces a steep mountain ridge'),
+      ('whiltilla', 'Whiltilla', 'A hiker raises both arms on a rocky ledge in the mist')
     ] %}
     <ul class="about-gallery__grid" role="list">
       {% for name, caption, description in photos %}
