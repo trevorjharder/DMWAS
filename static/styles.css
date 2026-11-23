@@ -249,33 +249,11 @@ h3 {
   color: #f1f5f1;
   font-size: clamp(1.05rem, 1.7vw, 1.25rem);
 }
-.about-hero--panorama {
-  align-items: center;
-  min-height: 0;
-  background: #213c40;
+.about-hero__inner--centered {
   text-align: center;
 }
-.about-hero--panorama .about-hero__photo,
-.about-hero--panorama .about-hero__inner {
-  grid-area: 1 / 1;
-}
-.about-hero--panorama .about-hero__photo {
-  position: static;
-  justify-self: center;
-  width: min(100%, 1008px);
-}
-.about-hero--panorama .about-hero__photo img {
-  height: auto;
-  object-fit: contain;
-}
-.about-hero--panorama::before {
-  background: linear-gradient(0deg, rgb(9 24 27 / 74%), rgb(9 24 27 / 42%));
-}
-.about-hero--panorama .about-hero__inner {
-  padding-block: clamp(1.5rem, 4vw, 4rem);
-}
-.about-hero--panorama h1,
-.about-hero--panorama .about-hero__intro {
+.about-hero__inner--centered h1,
+.about-hero__inner--centered .about-hero__intro {
   margin-inline: auto;
 }
 .about-hero__actions {
