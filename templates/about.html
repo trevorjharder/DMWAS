@@ -55,8 +55,8 @@
         a sense of belonging.
       </p>
       <p>
-        Our first priority is to build an inclusive and welcoming outdoor recreation
-        community across the Mount Waddington region. Through our community climbing
+        Our goal is to build an inclusive and welcoming outdoor recreation
+        community across the Mount Waddington region. Through the community climbing
         wall, organized hikes, group activities, and volunteer opportunities, we aim
         to connect people of all ages, backgrounds, and experience levels who share
         a passion for the outdoors.
@@ -86,7 +86,7 @@
       <p>
         Whether someone is learning to climb for the first time, developing backcountry
         skills, or gaining the confidence to explore independently, education empowers
-        our community to take the next step in their outdoor journey.
+        you to take the next step in your outdoor journey.
       </p>
     </div>
     {{ pillar_photo('bauza-climbing', 'A roped climber on the rock face at Bauza with a group gathered below') }}
@@ -96,8 +96,7 @@
     <div class="about-pillar__content">
       <h2 id="conservation-heading">Conservation</h2>
       <p>
-        As our community grows in knowledge and experience, so does our appreciation
-        for the natural environment. The mountains, forests, rivers, and coastlines
+        The mountains, forests, rivers, and coastlines
         of the Mount Waddington region are more than places to recreate—they are
         ecosystems worth protecting.
       </p>
@@ -123,8 +122,7 @@
         is ready to care for it.
       </p>
       <p>
-        Stewardship is where our other three pillars come together. Through volunteer
-        trail maintenance, improving recreational access, supporting responsible route
+        Through volunteer trail maintenance, responsible route
         development, and working alongside First Nations, land managers, and community
         partners, we aim to make a lasting, positive impact on the places we recreate.
       </p>
@@ -147,34 +145,45 @@
 
 <section class="about-gallery" aria-labelledby="gallery-heading">
   <div class="content-section about-gallery__inner">
-    <h2 id="gallery-heading">Around the region</h2>
+    <h2 id="gallery-heading">Explore the North Island</h2>
     {% set photos = [
       ('snow-saddle-ridge', 'Snow Saddle', 'A rugged, forested peak with a patch of snow below its cliffs'),
       ('bauza-climbing', 'Climbing at Bauza', 'A roped climber on a rock face with a group gathered below'),
       ('mount-st-patrick-hikers', 'Mount St. Patrick', 'A group of hikers looks out from a foggy ridge'),
       ('mount-st-patrick-coast', 'Mist over the coast', 'Surf breaks around a rocky island below a forested headland'),
-      ('alpine-basin', 'Alpine basin', 'A hiker crosses a rock slope below jagged peaks'),
-      ('rocky-summit', 'Rocky summit', 'Two people spread their arms at the top of a rocky spire'),
+      ('alpine-basin', 'The Blades', 'A hiker crosses a rock slope below jagged peaks'),
+      ('rocky-summit', 'Nathens Needles', 'Two people spread their arms at the top of a rocky spire'),
       ('sutton-peak-lookout', 'View from Sutton Peak', 'Two hikers stand on a rocky lookout above layers of mountains'),
-      ('sutton-peak-hiker', 'Hiking at Sutton Peak', 'A hiker with a backpack faces a steep mountain ridge'),
+      ('sutton-peak-hiker', 'Victoria and Warden', 'A hiker with a backpack faces a steep mountain ridge'),
       ('whiltilla', 'Whiltilla', 'A hiker raises both arms on a rocky ledge in the mist')
     ] %}
-    <ul class="about-gallery__grid" role="list">
-      {% for name, caption, description in photos %}
-      <li>
-        <a class="about-gallery__link" href="{{ url_for('static', filename='about/' ~ name ~ '.webp') }}">
-          <img
-            class="about-gallery__image"
-            src="{{ url_for('static', filename='about/' ~ name ~ '-thumb.webp') }}"
-            alt="{{ description }}"
-            loading="lazy"
-            decoding="async"
-          />
-          <span class="about-gallery__caption">{{ caption }}</span>
-        </a>
-      </li>
-      {% endfor %}
-    </ul>
+    <div class="about-gallery__carousel" data-photo-carousel>
+      <button class="about-gallery__arrow about-gallery__arrow--previous" type="button"
+        aria-label="Previous photo" aria-controls="north-island-photos" data-photo-previous hidden>
+        <span aria-hidden="true">←</span>
+      </button>
+      <button class="about-gallery__arrow about-gallery__arrow--next" type="button"
+        aria-label="Next photo" aria-controls="north-island-photos" data-photo-next hidden>
+        <span aria-hidden="true">→</span>
+      </button>
+      <ul class="about-gallery__track" id="north-island-photos" role="list" tabindex="0" aria-label="North Island photos">
+        {% for name, caption, description in photos %}
+        <li class="about-gallery__slide">
+          <a class="about-gallery__link" href="{{ url_for('static', filename='about/' ~ name ~ '.webp') }}">
+            <img
+              class="about-gallery__image"
+              src="{{ url_for('static', filename='about/' ~ name ~ '-thumb.webp') }}"
+              alt="{{ description }}"
+              loading="lazy"
+              decoding="async"
+            />
+            <span class="about-gallery__caption">{{ caption }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
   </div>
 </section>
+<script src="{{ url_for('static', filename='photo_carousel.js') }}" defer></script>
 {% endblock %}
