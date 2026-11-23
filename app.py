@@ -129,7 +129,7 @@ VOLUNTEER_INTERESTS = (
     "Administrative or organizational work",
 )
 CONSENT_VERSIONS = {
-    "membership_support": "membership-support-v1",
+    "membership_support": "membership-support-v2",
     "approval_understanding": "approval-understanding-v1",
     "privacy_acknowledgement": "privacy-acknowledgement-v1",
     "essential_communications": "essential-communications-v1",

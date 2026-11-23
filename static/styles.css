@@ -961,6 +961,40 @@ h3 {
 .auth-card .activity-cohost-select {
   min-width: 0;
 }
+.password-field {
+  position: relative;
+}
+.auth-card .password-field input {
+  padding-inline-end: 2.75rem;
+}
+.password-field:has(.password-field__toggle:not([hidden])) input::-ms-reveal {
+  display: none;
+}
+.password-field__toggle {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.password-field__toggle:not([hidden]) {
+  display: grid;
+  place-items: center;
+}
+.password-field__toggle:hover {
+  color: var(--ink);
+}
+.password-field__toggle:focus-visible {
+  outline-offset: -4px;
+}
+.password-field__toggle[aria-pressed="false"] .password-field__slash {
+  display: none;
+}
 .auth-card input[type="radio"],
 .auth-card input[type="checkbox"] {
   width: auto;

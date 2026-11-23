@@ -241,7 +241,10 @@ def test_membership_application_form_shows_requested_fields(client):
         b"Bylaws",
         b"/static/Constitution%20of%20the%20District%20of%20Mount%20Waddington%20Access%20Society.pdf",
         b"/static/Bylaws%20of%20the%20District%20of%20Mount_Waddington_Access_Society.pdf",
-        b"I agree to support the purposes",
+        b'<h1 id="membership-heading">Become a Member</h1>',
+        b'src="/static/about/snow-saddle-panorama.webp"',
+        b"<strong>I support the purposes of the Mount Waddington Access Society "
+        b"and will comply with its constitution and bylaws.</strong>",
         b"Parent or guardian consent for applicants under 19",
         b"Adult membership dues are $10 per year",
         b"Interac",
@@ -250,6 +253,17 @@ def test_membership_application_form_shows_requested_fields(client):
         b"Youth membership is free",
     ):
         assert field in response.data
+    for removed_copy in (
+        b'<p class="eyebrow">Membership</p>',
+        b"Complete the application below.",
+        b"Your date of birth is used to determine youth or adult membership eligibility.",
+        b"This form records your membership choice",
+        b"Your account will remain",
+    ):
+        assert removed_copy not in response.data
+    for field_id in (b"password", b"confirm_password"):
+        assert re.search(rb'<input\s+id="' + field_id + rb'"[^>]+type="password"', response.data)
+        assert b'aria-controls="' + field_id + b'"' in response.data
     assert b"Are you 19 or older?" not in response.data
     assert re.search(rb'<input\s+id="mailing_address"', response.data)
     assert b"<textarea" not in response.data
@@ -611,6 +625,10 @@ def test_access_request_stores_hash_and_is_not_login_enabled(
             "volunteer_contact",
         }
         assert all(record.version and record.accepted_at for record in consent_records)
+        assert any(
+            record.consent_type == "membership_support" and record.version == "membership-support-v2"
+            for record in consent_records
+        )
         member_id = member.id
 
     set_csrf(client)
