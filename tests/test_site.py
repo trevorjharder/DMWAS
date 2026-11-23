@@ -118,6 +118,10 @@ def test_donate_page_shows_etransfer_email_and_equipment_contact_note(client):
 
     assert response.status_code == 200
     assert b"donations@accessni.ca" in response.data
+    assert b'<h1 id="donate-heading">Donate to the Society</h1>' in response.data
+    assert b'class="about-hero about-hero--panorama"' in response.data
+    assert b'src="/static/about/snow-saddle-panorama.webp"' in response.data
+    assert b"snow-saddle-panorama-mobile.webp" not in response.data
     assert b"donate equipment" in response.data
     assert b'href="mailto:donations@accessni.ca"' in response.data
 
@@ -137,7 +141,7 @@ def test_contact_page_has_message_form_and_csrf(app, client):
 
     assert response.status_code == 200
     assert b">Send us a message</h2>" in response.data
-    assert b"snow-saddle-panorama-mobile.webp" in response.data
+    assert b"snow-saddle-panorama-mobile.webp" not in response.data
     assert b'src="/static/about/snow-saddle-panorama.webp"' in response.data
     assert b'class="contact-card"' not in response.data
     assert b"Messages go to inquiries@accessni.ca" not in response.data

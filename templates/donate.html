@@ -1,11 +1,16 @@
-{% extends "base.html" %} {% block content %}
-<section class="page-heading">
-  <p class="eyebrow">Support local access</p>
-  <h1>Donate to the Society</h1>
-  <p>
-    Your support helps the District of Mount Waddington Access Society advance
-    outdoor access, education, and stewardship in our region.
-  </p>
+{% extends "base.html" %}
+{% from "snow_saddle_panorama.html" import snow_saddle_panorama %}
+{% block content %}
+<section class="about-hero about-hero--panorama" aria-labelledby="donate-heading">
+  {{ snow_saddle_panorama(full_frame=true) }}
+  <div class="about-hero__inner">
+    <p class="eyebrow">Support local access</p>
+    <h1 id="donate-heading">Donate to the Society</h1>
+    <p class="about-hero__intro">
+      Your support helps the District of Mount Waddington Access Society advance
+      outdoor access, education, and stewardship in our region.
+    </p>
+  </div>
 </section>
 <section class="contact-card" aria-labelledby="etransfer-heading">
   <h2 id="etransfer-heading">Donate by e-Transfer</h2>

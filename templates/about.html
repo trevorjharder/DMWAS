@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "snow_saddle_panorama.html" import snow_saddle_panorama %}
 
 {% macro pillar_photo(name, description, thumbnail_width=720, photo_width=1600) %}
   <img
@@ -15,7 +16,7 @@
 
 {% block content %}
 <section class="about-hero" aria-labelledby="about-heading">
-  {% include "snow_saddle_panorama.html" %}
+  {{ snow_saddle_panorama() }}
   <div class="about-hero__inner">
     <p class="eyebrow">Community · Education · Conservation · Stewardship</p>
     <h1 id="about-heading">Access to the outdoors in the Mount Waddington region</h1>

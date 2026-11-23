@@ -1,16 +1,20 @@
+{% macro snow_saddle_panorama(full_frame=false) %}
 <picture class="about-hero__photo">
+  {% if not full_frame %}
   <source
     media="(max-width: 760px)"
     srcset="{{ url_for('static', filename='about/snow-saddle-panorama-mobile.webp') }}"
   />
+  {% endif %}
   <img
     src="{{ url_for('static', filename='about/snow-saddle-panorama.webp') }}"
     srcset="{{ url_for('static', filename='about/snow-saddle-panorama-medium.webp') }} 1440w,
             {{ url_for('static', filename='about/snow-saddle-panorama.webp') }} 2200w"
-    sizes="100vw"
+    sizes="{{ '(max-width: 1008px) 100vw, 1008px' if full_frame else '100vw' }}"
     width="2200"
     height="1467"
     fetchpriority="high"
     alt="Layers of blue mountain ridges beneath a cloud bank, seen from Snow Saddle"
   />
 </picture>
+{% endmacro %}

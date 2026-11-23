@@ -1,6 +1,8 @@
-{% extends "base.html" %} {% block content %}
-<section class="about-hero contact-hero" aria-labelledby="contact-heading">
-  {% include "snow_saddle_panorama.html" %}
+{% extends "base.html" %}
+{% from "snow_saddle_panorama.html" import snow_saddle_panorama %}
+{% block content %}
+<section class="about-hero about-hero--panorama" aria-labelledby="contact-heading">
+  {{ snow_saddle_panorama(full_frame=true) }}
   <div class="about-hero__inner">
     <p class="eyebrow">Get in touch</p>
     <h1 id="contact-heading">Contact the Society</h1>
