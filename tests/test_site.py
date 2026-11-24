@@ -95,7 +95,7 @@ def test_public_pages_render(client):
         assert b"District of Mount Waddington" in response.data
 
 
-def test_about_hides_member_navigation_for_signed_in_users(app, client, make_user):
+def test_about_and_placeholder_hide_member_navigation(app, client, make_user):
     with app.app_context():
         admin = make_user(is_admin=True)
         db.session.add(admin)
@@ -107,10 +107,20 @@ def test_about_hides_member_navigation_for_signed_in_users(app, client, make_use
     assert about.status_code == 200
     assert b"Sign out" in about.data
     assert b'aria-label="Member navigation"' not in about.data
+    assert b'href="/member"' in about.data
 
     member_area = client.get("/member")
     assert member_area.status_code == 200
-    assert b'aria-label="Member navigation"' in member_area.data
+    header, main = member_area.data.split(b'<main id="main-content">', 1)
+    assert b"The MemberZone is coming soon." in main
+    assert b'aria-label="Member navigation"' not in member_area.data
+    assert b'href="/admin/requests"' in header
+    assert b'href="/member/profile">Manage Profile</a>' in header
+    assert client.get("/member/profile").status_code == 200
+
+    resources = client.get("/member/resources")
+    assert resources.status_code == 200
+    assert b'aria-label="Member navigation"' in resources.data
 
 
 def test_donate_page_shows_etransfer_email_and_equipment_contact_note(client):
@@ -793,14 +803,11 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
     )
     assert response.status_code == 302
     assert response.location.endswith("/member")
-    assert client.get("/member").status_code == 200
-    member_home = client.get("/member")
-    assert b"Your membership" in member_home.data
-    assert b"Membership status" in member_home.data
-    assert b"Current term" in member_home.data
-    assert b"Resources" in member_home.data
-    assert b"Search Members" in member_home.data
-    assert b"Manage Members" not in member_home.data
+    member_home = client.get(response.location)
+    assert member_home.status_code == 200
+    assert b"The MemberZone is coming soon." in member_home.data
+    assert b"Membership status" not in member_home.data
+    assert b'aria-label="Member navigation"' not in member_home.data
     assert client.get("/member/resources").status_code == 200
     assert client.get("/members/search?q=Test").status_code == 200
 
@@ -827,9 +834,10 @@ def test_non_admin_cannot_review_requests(client, app):
         f"/admin/members/{member_id}/make-admin",
         data={"csrf_token": "test-csrf-token"},
     ).status_code == 403
-    member_home = client.get("/member")
-    assert b"Manage Members" not in member_home.data
-    assert b"Access Requests" not in member_home.data
+    resources = client.get("/member/resources")
+    assert resources.status_code == 200
+    assert b"Manage Members" not in resources.data
+    assert b"Access Requests" not in resources.data
 
 
 def test_member_directory_is_adult_only_and_reveals_no_profiles_before_opt_in(
@@ -872,7 +880,7 @@ def test_member_directory_is_adult_only_and_reveals_no_profiles_before_opt_in(
     assert adult_name.encode() not in adult_response.data
     assert youth_name.encode() not in adult_response.data
     assert expired_name.encode() not in adult_response.data
-    assert b"Search Members" in client.get("/member").data
+    assert b"Search Members" in client.get("/member/resources").data
 
     with app.app_context():
         youth_id = User.query.filter_by(full_name=youth_name).one().id
@@ -881,10 +889,10 @@ def test_member_directory_is_adult_only_and_reveals_no_profiles_before_opt_in(
         session["csrf_token"] = "test-csrf-token"
     youth_response = client.get("/members/search?q=Synthetic")
     assert youth_response.status_code == 403
-    assert b"Search Members" not in client.get("/member").data
+    assert b"Search Members" not in client.get("/member/resources").data
 
 
-def test_profile_is_private_by_default_and_owner_can_preview(client, app, make_user):
+def test_manage_profile_opens_community_preview_before_editing(client, app, make_user):
     with app.app_context():
         member = make_user()
         db.session.add(member)
@@ -892,16 +900,28 @@ def test_profile_is_private_by_default_and_owner_can_preview(client, app, make_u
         member_id = member.id
 
     login_as(client, member_id)
-    edit_page = client.get("/member/profile")
+    assert b'href="/member/profile"' in client.get("/member").data
+    manage = client.get("/member/profile")
+    assert manage.status_code == 200
+    assert b"<h1>Manage Profile</h1>" in manage.data
+    assert b'href="/member/profile/account"' in manage.data
+    assert b'href="/member/profile/community">Manage Community Profile</a>' in manage.data
+
+    preview = client.get("/member/profile/community")
+    assert preview.status_code == 200
+    assert b"No profile saved yet" in preview.data
+    assert b'href="/member/profile/community/edit">Create profile</a>' in preview.data
+    assert b'name="display_name"' not in preview.data
+
+    edit_page = client.get("/member/profile/community/edit")
     assert edit_page.status_code == 200
     assert b"Your legal" in edit_page.data
     assert b"name=\"directory_opt_in\"" in edit_page.data
-    assert client.get("/member/profile/preview").status_code == 200
     assert b"No profile saved yet" in client.get("/member/profile/preview").data
 
     set_csrf(client)
     response = client.post(
-        "/member/profile",
+        "/member/profile/community/edit",
         data={
             "csrf_token": "test-csrf-token",
             "display_name": "Coastal Climber",
@@ -914,6 +934,7 @@ def test_profile_is_private_by_default_and_owner_can_preview(client, app, make_u
         },
     )
     assert response.status_code == 302
+    assert response.location == "/member/profile/community"
     with app.app_context():
         profile = CommunityProfile.query.filter_by(user_id=member_id).one()
         assert profile.directory_opt_in is False
@@ -923,12 +944,132 @@ def test_profile_is_private_by_default_and_owner_can_preview(client, app, make_u
         assert profile.show_interests is True
         assert profile.show_goals is False
 
-    preview = client.get("/member/profile/preview")
+    preview = client.get(response.location)
     assert preview.status_code == 200
     assert b"Private" in preview.data
     assert b"Coastal Climber" in preview.data
-    assert b"member@example.test" not in preview.data
+    assert b"I enjoy local trails." in preview.data
+    assert b"Port McNeill area" not in preview.data
+    assert b"synthetic-1@example.test" not in preview.data
     assert b"1 Example Street" not in preview.data
+    assert b'href="/member/profile/community/edit">Edit profile</a>' in preview.data
+
+
+def test_member_account_can_update_private_details_and_sign_in(client, app, make_user):
+    with app.app_context():
+        member = make_user()
+        db.session.add(member)
+        db.session.commit()
+        member_id = member.id
+        db.session.add(PasswordResetCode(
+            user_id=member_id,
+            code_hash="outstanding-code",
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5),
+        ))
+        db.session.commit()
+
+    url = "/member/profile/account"
+    assert client.get(url).location.startswith("/login?")
+    login_as(client, member_id)
+    edit = client.get(url)
+    assert edit.status_code == 200
+    assert b"synthetic-1@example.test" in edit.data
+    assert b"1 Example Street" in edit.data
+    assert edit.headers["Cache-Control"] == "private, no-store"
+
+    updates = {
+        "csrf_token": "test-csrf-token",
+        "first_name": "Updated",
+        "last_name": "Member",
+        "email": "UPDATED@example.test",
+        "phone": "250-555-0142",
+        "community": "Port Hardy",
+        "mailing_address": "2 Example Street",
+        "activities": ["Hiking"],
+        "volunteer_interests": ["Outdoor trail maintenance"],
+        "volunteer_contact_ok": "yes",
+        "newsletter_opt_in": "yes",
+        "username": "Updated-Member",
+        "password": "New-Synthetic-Password",
+        "confirm_password": "New-Synthetic-Password",
+        "date_of_birth": "2015-01-01",
+        "membership_type": "youth",
+    }
+    rejected = client.post(url, data=updates)
+    assert rejected.status_code == 400
+    assert b"Enter your current password" in rejected.data
+    assert b"New-Synthetic-Password" not in rejected.data
+    with app.app_context():
+        assert db.session.get(User, member_id).full_name == "Synthetic Member 1"
+
+    response = client.post(url, data={**updates, "current_password": "Synthetic-Password-1"})
+    assert response.location == "/member/profile"
+    with app.app_context():
+        member = db.session.get(User, member_id)
+        details = member.membership_details
+        assert (member.full_name, member.phone) == ("Updated Member", "250-555-0142")
+        assert (member.email, member.username) == ("updated@example.test", "updated-member")
+        assert (details.first_name, details.last_name) == ("Updated", "Member")
+        assert (details.community, details.mailing_address) == ("Port Hardy", "2 Example Street")
+        assert details.activities == ["Hiking"]
+        assert (details.date_of_birth, details.membership_type) == (date(1990, 1, 1), "adult")
+        assert member.membership_preferences.volunteer_interests == ["Outdoor trail maintenance"]
+        assert {(item.consent_type, item.granted) for item in member.consent_records} == {
+            ("volunteer_contact", True), ("newsletter", True),
+        }
+        assert PasswordResetCode.query.one().used_at is not None
+
+    assert client.post("/logout", data={"csrf_token": "test-csrf-token"}).status_code == 302
+    set_csrf(client)
+    response = client.post("/login", data={
+        "csrf_token": "test-csrf-token",
+        "username": "updated-member",
+        "password": "New-Synthetic-Password",
+    })
+    assert response.location == "/member"
+
+
+def test_legacy_account_edit_rejects_duplicate_email_and_saves_preferences(client, app, make_user):
+    with app.app_context():
+        member, other = make_user(), make_user()
+        member.membership_details = None
+        db.session.add_all([member, other])
+        db.session.commit()
+        member_id, other_id = member.id, other.id
+
+    login_as(client, member_id)
+    url = "/member/profile/account"
+    assert b'name="full_name"' in client.get(url).data
+    updates = {
+        "csrf_token": "test-csrf-token",
+        "full_name": "Legacy Member",
+        "username": "synthetic-1",
+        "email": "synthetic-1@example.test",
+        "newsletter_opt_in": "yes",
+        "user_id": other_id,
+    }
+    duplicate = client.post(url, data={
+        **updates,
+        "email": "synthetic-2@example.test",
+        "current_password": "Synthetic-Password-1",
+    })
+    assert duplicate.status_code == 400
+    assert b"already in use" in duplicate.data
+    with app.app_context():
+        assert db.session.get(User, member_id).membership_preferences is None
+
+    assert client.post(url, data=updates).status_code == 302
+    del updates["newsletter_opt_in"]
+    assert client.post(url, data=updates).status_code == 302
+    with app.app_context():
+        member = db.session.get(User, member_id)
+        assert member.full_name == "Legacy Member"
+        assert member.membership_details is None
+        assert not member.membership_preferences.newsletter_opt_in
+        assert {(item.consent_type, item.granted) for item in member.consent_records} == {
+            ("newsletter", True), ("newsletter", False),
+        }
+        assert db.session.get(User, other_id).full_name == "Synthetic Member 2"
 
 
 def test_opted_in_profile_is_auto_approved_and_only_shows_selected_fields(
@@ -1172,12 +1313,10 @@ def test_admin_member_page_is_linked_and_lists_accounts(client, app):
         member_id = member.id
 
     login_as(client, admin_id)
-    home = client.get("/member")
-    assert b"Manage Members" in home.data
-    assert b"Access Requests" in home.data
-    assert b"Administrator tools" in home.data
-    assert b"Open member management" in home.data
-    assert b"Review requests" in home.data
+    resources = client.get("/member/resources")
+    assert resources.status_code == 200
+    assert b"Manage Members" in resources.data
+    assert b"Access Requests" in resources.data
 
     response = client.get("/admin/members")
     assert response.status_code == 200

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% macro field(name, label, value, maxlength, autocomplete='', type='text', required=true) %}
+<label for="{{ name }}">{{ label }}</label>
+<input
+  id="{{ name }}"
+  name="{{ name }}"
+  type="{{ type }}"
+  value="{{ request.form.get(name, value or '') }}"
+  maxlength="{{ maxlength }}"
+  {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+  {% if required %}required{% endif %}
+/>
+{% endmacro %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <h1>Edit account information</h1>
+    <p>Your account details are private. You can choose what to share on your community profile.</p>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+
+      <fieldset class="form-options">
+        <legend>Contact information</legend>
+        {% if details %}
+        {{ field('first_name', 'First name', details.first_name, 60, 'given-name') }}
+        {{ field('last_name', 'Last name', details.last_name, 60, 'family-name') }}
+        {% else %}
+        {{ field('full_name', 'Full name', current_user.full_name, 120, 'name') }}
+        {% endif %}
+        {{ field('email', 'Email', current_user.email, 254, 'email', 'email') }}
+        {{ field('phone', 'Phone', current_user.phone, 40, 'tel', 'tel', false) }}
+        {% if details %}
+        {{ field('community', 'Community of residence', details.community, 120, 'address-level2') }}
+        <label for="mailing_address">Mailing address</label>
+        <textarea id="mailing_address" name="mailing_address" maxlength="500" rows="3" autocomplete="street-address" required>{{ request.form.get('mailing_address', details.mailing_address) }}</textarea>
+        {% endif %}
+      </fieldset>
+
+      {% if show_guardian %}
+      <fieldset class="form-options">
+        <legend>Parent or guardian contact</legend>
+        {{ field('guardian_name', 'Name', preferences.guardian_name if preferences else '', 120, 'section-guardian name', 'text', false) }}
+        {{ field('guardian_email', 'Email', preferences.guardian_email if preferences else '', 254, 'section-guardian email', 'email', false) }}
+      </fieldset>
+      {% endif %}
+
+      {% if details %}
+      {% set selected_activities = request.form.getlist('activities') if request.method == 'POST' else details.activities %}
+      <fieldset class="form-options">
+        <legend>Outdoor activities</legend>
+        {% for activity in activities %}
+        <label class="check-label"><input type="checkbox" name="activities" value="{{ activity }}" {% if activity in selected_activities %}checked{% endif %} />{{ activity }}</label>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
+
+      {% set selected_volunteer = request.form.getlist('volunteer_interests') if request.method == 'POST' else (preferences.volunteer_interests if preferences else []) %}
+      {% set volunteer_contact = (request.form.get('volunteer_contact_ok') == 'yes') if request.method == 'POST' else (preferences and preferences.volunteer_contact_ok) %}
+      {% set newsletter = (request.form.get('newsletter_opt_in') == 'yes') if request.method == 'POST' else (preferences and preferences.newsletter_opt_in) %}
+      <fieldset class="form-options">
+        <legend>Volunteer interests</legend>
+        {% for interest in volunteer_interests %}
+        <label class="check-label"><input type="checkbox" name="volunteer_interests" value="{{ interest }}" {% if interest in selected_volunteer %}checked{% endif %} />{{ interest }}</label>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset class="form-options">
+        <legend>Communication preferences</legend>
+        <label class="check-label"><input type="checkbox" name="volunteer_contact_ok" value="yes" {% if volunteer_contact %}checked{% endif %} />Contact me about volunteer opportunities</label>
+        <label class="check-label"><input type="checkbox" name="newsletter_opt_in" value="yes" {% if newsletter %}checked{% endif %} />Send me the Society newsletter</label>
+      </fieldset>
+
+      <fieldset class="form-options">
+        <legend>Sign-in details</legend>
+        {{ field('username', 'Username', current_user.username, 40, 'username') }}
+        <p class="form-hint" id="current-password-help">Enter your current password if you change your email, username, or password.</p>
+        <label for="current_password">Current password</label>
+        <input id="current_password" name="current_password" type="password" autocomplete="current-password" aria-describedby="current-password-help" />
+        <label for="password">New password</label>
+        <input id="password" name="password" type="password" autocomplete="new-password" minlength="{{ min_password_length }}" aria-describedby="new-password-help" />
+        <p class="form-hint" id="new-password-help">Use at least {{ min_password_length }} characters. Leave both new password fields blank to keep your current password.</p>
+        <label for="confirm_password">Confirm new password</label>
+        <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="{{ min_password_length }}" />
+      </fieldset>
+
+      <div class="profile-form-actions">
+        <button class="button button--primary" type="submit">Save account information</button>
+        <a href="{{ url_for('manage_profile') }}">Cancel</a>
+      </div>
+    </form>
+    <p class="auth-card__footnote"><a href="{{ url_for('contact') }}">Contact the Society</a> to correct your date of birth or membership type.</p>
+  </div>
+</section>
+{% endblock %}

@@ -1,7 +1,6 @@
 {% extends "base.html" %} {% block content %}
 <section class="page-heading">
-  <p class="eyebrow">Community Hub</p>
-  <h1>Your community profile</h1>
+  <h1>Edit community profile</h1>
   <p>
     This profile is separate from your Society membership record. Your legal
     name, email, phone, address, and date of birth are never shown in the
@@ -16,7 +15,7 @@
       {% if profile.moderation_note %}<br />Reviewer note: {{ profile.moderation_note }}{% endif %}
     </p>
     {% endif %}
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" action="{{ url_for('member_profile') }}" enctype="multipart/form-data">
       <input
         type="hidden"
         name="csrf_token"
@@ -141,7 +140,7 @@
       <p class="form-hint">Only the fields you select are shared. Your opted-in profile and edits are automatically approved. Administrators can still unpublish profiles.</p>
       <div class="profile-form-actions">
         <button class="button button--primary" type="submit">Save profile</button>
-        <a class="button button--secondary" href="{{ url_for('member_profile_preview') }}">Preview saved profile</a>
+        <a href="{{ url_for('member_profile_preview') }}">Cancel</a>
       </div>
     </form>
     {% if profile %}

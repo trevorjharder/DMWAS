@@ -111,7 +111,7 @@ button:focus-visible {
   text-decoration: none;
 }
 .member-nav a:hover,
-.member-nav a[aria-current="page"] {
+.member-nav a[aria-current] {
   background: var(--forest);
   color: white;
 }

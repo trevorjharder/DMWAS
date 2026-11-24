@@ -5,20 +5,9 @@
 </section>
 <section class="directory-section">
   <article class="community-profile-card" aria-label="Member profile">
-    {% if public_fields.photo_url %}<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Profile photo for {{ public_fields.display_name }}" width="128" height="128" />{% endif %}
-    {% if public_fields.biography %}
-    <section><h2>About</h2><p>{{ public_fields.biography }}</p></section>
-    {% endif %}
-    {% if public_fields.community %}
-    <p><strong>General area:</strong> {{ public_fields.community }}</p>
-    {% endif %}
-    {% if public_fields.interests %}
-    <section><h2>Interests</h2><ul>{% for interest in public_fields.interests %}<li>{{ interest }}</li>{% endfor %}</ul></section>
-    {% endif %}
-    {% if public_fields.goals %}
-    <section><h2>Participation goals</h2><ul>{% for goal in public_fields.goals %}<li>{{ goal }}</li>{% endfor %}</ul></section>
-    {% endif %}
-    {% include "profile_highlights.html" %}
+    {% with section_heading = 'h2' %}
+    {% include "community_profile_fields.html" %}
+    {% endwith %}
   </article>
   <p class="form-hint">Contact information and verified membership identity are not displayed.</p>
   {% if config.COMMUNITY_MESSAGING_ENABLED and connection_target %}

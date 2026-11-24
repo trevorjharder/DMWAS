@@ -59,7 +59,14 @@
           <button class="nav-button" type="submit">Sign out</button>
         </form>
         {% elif current_user and current_user.status == 'active' %}
-        <a href="{{ url_for('member_home') }}">Member area</a>
+        <a
+          href="{{ url_for('member_home') }}"
+          {% if request.endpoint == 'member_home' %}aria-current="page"{% endif %}
+          >Member area</a
+        >
+        {% if request.endpoint == 'member_home' %}
+        <a href="{{ url_for('manage_profile') }}">Manage Profile</a>
+        {% endif %}
         {% if current_user.is_admin %}<a href="{{ url_for('admin_requests') }}"
           >Admin</a
         >{% endif %}
@@ -78,23 +85,11 @@
       </nav>
     </header>
 
-    {% if current_user and current_user.status == 'active' and request.endpoint != 'about' %}
+    {% if current_user and current_user.status == 'active' and request.endpoint not in ['about', 'member_home'] %}
     {% set endpoint = request.endpoint or '' %}
     <nav class="member-nav" aria-label="Member navigation">
       <div class="member-nav__inner">
-        <a
-          href="{{ url_for('member_home') }}"
-          {%
-          if
-          endpoint
-          in
-          ['member_home']
-          %}aria-current="page"
-          {%
-          endif
-          %}
-          >Member area</a
-        >
+        <a href="{{ url_for('member_home') }}">Member area</a>
         <a
           href="{{ url_for('member_resources') }}"
           {%
@@ -109,17 +104,10 @@
           >Resources</a
         >
         <a
-          href="{{ url_for('member_profile') }}"
-          {%
-          if
-          endpoint
-          in
-          ['member_profile', 'member_profile_preview']
-          %}aria-current="page"
-          {%
-          endif
-          %}
-          >Community profile</a
+          href="{{ url_for('manage_profile') }}"
+          {% if endpoint == 'manage_profile' %}aria-current="page"
+          {% elif endpoint in ['member_account_edit', 'member_profile', 'member_profile_preview'] %}aria-current="location"{% endif %}
+          >Manage Profile</a
         >
         {% if can_access_adult_hub %}
         <a

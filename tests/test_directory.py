@@ -185,7 +185,7 @@ def test_admin_verification_member_selection_and_immediate_revocation(client, ap
         record_id = record.id
         assert VerifiedCommunityRecordAudit.query.one().actor_id == directory["admin"]
     login_as(client, directory["owner"])
-    assert b"Verified trail work" in client.get("/member/profile").data
+    assert b"Verified trail work" in client.get("/member/profile/community/edit").data
     payload = {"csrf_token": "test-csrf-token", "display_name": "Trail Alias", "directory_opt_in": "yes",
                "show_highlights": "yes", "highlights": str(record_id)}
     assert client.post("/member/profile", data=payload).status_code == 302
@@ -219,7 +219,7 @@ def test_member_cannot_select_invalid_highlights_or_leak_stale_selection(client,
         profile.highlights.append(CommunityProfileHighlight(record_id=record_id))
         db.session.commit()
     login_as(client, directory["owner"])
-    assert b"Never reveal this record" not in client.get("/member/profile").data
+    assert b"Never reveal this record" not in client.get("/member/profile/community/edit").data
     assert client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Trail Alias",
         "highlights": str(record_id), "show_highlights": "yes"}).status_code == 400
     login_as(client, directory["viewer"])

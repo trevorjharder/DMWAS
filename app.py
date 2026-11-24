@@ -841,12 +841,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             response.vary.add("Cookie")
         return response
 
-    @app.context_processor
-    def inject_highlight_options():
-        if request.endpoint == "member_profile" and g.get("current_user"):
-            return {"highlight_records": highlight_options(g.current_user.id)}
-        return {}
-
     def login_required(view: F) -> F:
         @wraps(view)
         def wrapped(*args: object, **kwargs: object):
@@ -1430,34 +1424,160 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @app.get("/member")
     @login_required
     def member_home():
-        member = g.current_user
-        membership_term = (
-            MembershipTerm.query.filter_by(user_id=member.id)
-            .order_by(MembershipTerm.term_number.desc())
-            .first()
-        )
-        profile = CommunityProfile.query.filter_by(user_id=member.id).first()
-        return render_template(
-            "member_home.html",
-            title="Member area",
-            membership_term=membership_term,
-            community_profile=profile,
-        )
+        return render_template("member_home.html", title="Member area")
 
-    @app.route("/member/profile", methods=["GET", "POST"])
+    @app.get("/member/profile")
+    @profile_owner_required
+    def manage_profile():
+        return render_template("manage_profile.html", title="Manage Profile")
+
+    @app.route("/member/profile/account", methods=["GET", "POST"])
+    @profile_owner_required
+    def member_account_edit():
+        user = g.current_user
+        if request.method == "POST":
+            user = User.query.populate_existing().with_for_update().filter_by(id=user.id).first_or_404()
+        details = user.membership_details
+        preferences = user.membership_preferences
+        show_guardian = bool(
+            (details and details.membership_type == "youth")
+            or (preferences and (preferences.guardian_name or preferences.guardian_email))
+        )
+        errors = []
+
+        if request.method == "POST":
+            email = request.form.get("email", "").strip().lower()
+            username = request.form.get("username", "").strip().lower()
+            phone = request.form.get("phone", "").strip()
+            password = request.form.get("password", "")
+            confirm_password = request.form.get("confirm_password", "")
+            email_changed = email != user.email
+            username_changed = username != user.username
+            if email_changed and (len(email) > 254 or not EMAIL_PATTERN.fullmatch(email)):
+                errors.append("Enter a valid email address of up to 254 characters.")
+            if username_changed and not re.fullmatch(r"[a-z0-9_.-]{3,40}", username):
+                errors.append("Choose a username of 3–40 letters, numbers, dots, underscores, or hyphens.")
+            if len(phone) > 40:
+                errors.append("Enter a phone number of up to 40 characters.")
+            if ((email_changed or username_changed or password or confirm_password)
+                    and not user.check_password(request.form.get("current_password", ""))):
+                errors.append("Enter your current password to change your sign-in details.")
+            if password and len(password) < MIN_PASSWORD_LENGTH:
+                errors.append(f"Use at least {MIN_PASSWORD_LENGTH} characters for your new password.")
+            if password != confirm_password:
+                errors.append("The new passwords do not match.")
+
+            if details:
+                first_name = request.form.get("first_name", "").strip()
+                last_name = request.form.get("last_name", "").strip()
+                full_name = f"{first_name} {last_name}"
+                if (not first_name or not last_name
+                        or max(len(first_name), len(last_name)) > 60 or len(full_name) > 120):
+                    errors.append("Enter your first and last names (up to 60 characters each and 120 combined).")
+                community = request.form.get("community", "").strip()
+                mailing_address = request.form.get("mailing_address", "").strip()
+                activities = list(dict.fromkeys(request.form.getlist("activities")))
+                if not community or len(community) > 120:
+                    errors.append("Enter your community of residence (up to 120 characters).")
+                if not mailing_address or len(mailing_address) > 500:
+                    errors.append("Enter your mailing address (up to 500 characters).")
+                if any(activity not in MEMBERSHIP_ACTIVITIES for activity in activities):
+                    errors.append("Select only activities from the list.")
+            else:
+                full_name = request.form.get("full_name", "").strip()
+                if not full_name or len(full_name) > 120:
+                    errors.append("Enter your full name (up to 120 characters).")
+
+            volunteer_choices = list(dict.fromkeys(request.form.getlist("volunteer_interests")))
+            if any(choice not in VOLUNTEER_INTERESTS for choice in volunteer_choices):
+                errors.append("Select only volunteer interests from the list.")
+            if show_guardian:
+                guardian_name = request.form.get("guardian_name", "").strip()
+                guardian_email = request.form.get("guardian_email", "").strip().lower()
+                if guardian_name or guardian_email:
+                    if not guardian_name or len(guardian_name) > 120:
+                        errors.append("Enter your parent or guardian's name (up to 120 characters).")
+                    if len(guardian_email) > 254 or not EMAIL_PATTERN.fullmatch(guardian_email):
+                        errors.append("Enter a valid parent or guardian email address.")
+                elif preferences and (preferences.guardian_name or preferences.guardian_email):
+                    errors.append("Enter your parent or guardian's contact details.")
+
+            if not errors:
+                if email_changed or password:
+                    PasswordResetCode.query.filter_by(user_id=user.id, used_at=None).update(
+                        {"used_at": datetime.now(timezone.utc).replace(tzinfo=None)},
+                        synchronize_session=False,
+                    )
+                user.full_name = full_name
+                user.email = email
+                user.username = username
+                user.phone = phone or None
+                if password:
+                    user.set_password(password)
+
+                if details:
+                    details.first_name = first_name
+                    details.last_name = last_name
+                    details.community = community
+                    details.mailing_address = mailing_address
+                    details.activities = activities
+                if preferences is None:
+                    preferences = user.membership_preferences = MembershipPreferences()
+                preferences.volunteer_interest = bool(volunteer_choices)
+                preferences.volunteer_interests = volunteer_choices
+                for consent_type, attribute in (
+                    ("newsletter", "newsletter_opt_in"),
+                    ("volunteer_contact", "volunteer_contact_ok"),
+                ):
+                    granted = request.form.get(attribute) == "yes"
+                    if granted != bool(getattr(preferences, attribute)):
+                        db.session.add(MembershipConsent(
+                            user_id=user.id,
+                            consent_type=consent_type,
+                            version=CONSENT_VERSIONS[consent_type],
+                            granted=granted,
+                        ))
+                    setattr(preferences, attribute, granted)
+                if show_guardian:
+                    preferences.guardian_name = guardian_name or None
+                    preferences.guardian_email = guardian_email or None
+
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    errors.append("That email or username is already in use.")
+                else:
+                    flash("Your account information was saved.", "success")
+                    return redirect(url_for("manage_profile"))
+
+        for error in errors:
+            flash(error, "error")
+        return render_template(
+            "member_account_edit.html",
+            title="Edit account information",
+            details=user.membership_details,
+            preferences=user.membership_preferences,
+            activities=MEMBERSHIP_ACTIVITIES,
+            volunteer_interests=VOLUNTEER_INTERESTS,
+            show_guardian=show_guardian,
+            min_password_length=MIN_PASSWORD_LENGTH,
+        ), 400 if errors else 200
+
+    @app.post("/member/profile")
+    @app.route("/member/profile/community/edit", methods=["GET", "POST"])
     @profile_owner_required
     def member_profile():
         user = g.current_user
         profile = profile_query_options(CommunityProfile.query).filter_by(user_id=user.id).with_for_update().first()
-        form_interests = request.form.getlist("interests")
-        form_goals = request.form.getlist("participation_goals")
+        highlight_records = highlight_options(user.id)
 
         if request.method == "POST":
             display_name = request.form.get("display_name", "").strip()
             biography = request.form.get("biography", "").strip()
             general_community = request.form.get("general_community", "").strip()
-            requested_interests = list(dict.fromkeys(form_interests))
-            requested_goals = list(dict.fromkeys(form_goals))
+            requested_interests = list(dict.fromkeys(request.form.getlist("interests")))
+            requested_goals = list(dict.fromkeys(request.form.getlist("participation_goals")))
             directory_opt_in = request.form.get("directory_opt_in") == "yes"
             errors = []
 
@@ -1466,7 +1586,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             except ValueError:
                 chosen_highlights = set()
                 errors.append("Choose valid verified highlights.")
-            allowed_highlights = {record.id for record in highlight_options(user.id)}
+            allowed_highlights = {record.id for record in highlight_records}
             if len(chosen_highlights) > 10 or not chosen_highlights <= allowed_highlights:
                 errors.append("Choose up to ten of your own verified, shareable highlights.")
 
@@ -1495,12 +1615,11 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     flash(error, "error")
                 return render_template(
                     "member_profile_edit.html",
-                    title="Community profile",
+                    title="Edit community profile",
                     profile=profile,
                     interests=COMMUNITY_PROFILE_INTERESTS,
                     goals=COMMUNITY_PROFILE_GOALS,
-                    selected_interests=form_interests,
-                    selected_goals=form_goals,
+                    highlight_records=highlight_records,
                 ), 400
 
             if profile is None:
@@ -1557,25 +1676,25 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                 "Profile saved privately. Directory opt-in is off.",
                 "success",
             )
-            return redirect(url_for("member_profile"))
+            return redirect(url_for("member_profile_preview"))
 
         return render_template(
             "member_profile_edit.html",
-            title="Community profile",
+            title="Edit community profile",
             profile=profile,
             interests=COMMUNITY_PROFILE_INTERESTS,
             goals=COMMUNITY_PROFILE_GOALS,
-            selected_interests=form_interests if request.method == "POST" else None,
-            selected_goals=form_goals if request.method == "POST" else None,
+            highlight_records=highlight_records,
         )
 
     @app.get("/member/profile/preview")
+    @app.get("/member/profile/community")
     @profile_owner_required
     def member_profile_preview():
-        profile = CommunityProfile.query.filter_by(user_id=g.current_user.id).first()
+        profile = profile_query_options(CommunityProfile.query).filter_by(user_id=g.current_user.id).first()
         return render_template(
             "member_profile_preview.html",
-            title="Preview community profile",
+            title="Manage Community Profile",
             profile=profile,
             public_fields=community_profile_fields(profile) if profile else {},
             eligible=has_capability(g.current_user, Capability.ADULT_DIRECTORY),
@@ -1648,7 +1767,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         db.session.commit()
         flash("Your community profile, photo and profile review history were deleted. "
               "Your membership account is unchanged.", "success")
-        return redirect(url_for("member_profile"))
+        return redirect(url_for("member_profile_preview"))
 
     @app.get("/member/resources")
     @login_required
