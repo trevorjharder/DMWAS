@@ -29,7 +29,6 @@
       </a>
       <nav class="site-nav" aria-label="Main navigation">
         <a href="{{ url_for('about') }}">About</a>
-        <a href="{{ url_for('notices') }}">Notices</a>
         {% if current_user %}
         <a
           href="{{ url_for('activities.public_list') }}"
