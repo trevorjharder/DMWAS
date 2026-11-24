@@ -1,73 +1,174 @@
-{% extends "base.html" %} {% block content %}
-<section class="hero">
-  <p class="eyebrow">Outdoor access · Education · Stewardship</p>
-  <h1>Access to the outdoors in the Mount Waddington region</h1>
-  <p class="hero__intro">
-    The District of Mount Waddington Access Society is a society focused on
-    improving access to hiking, climbing, and mountaineering opportunities in
-    the region.
-  </p>
-  <div class="hero__actions">
-    <a class="button button--primary" href="{{ url_for('notices') }}"
-      >View notices</a
-    >
-    <a class="button button--secondary" href="{{ url_for('contact') }}"
-      >Contact the Society</a
-    >
+{% extends "base.html" %}
+
+{% macro pillar_photo(name, description, thumbnail_width=720, photo_width=1600) %}
+  <img
+    class="about-pillar__photo"
+    src="{{ url_for('static', filename='about/' ~ name ~ '.webp') }}"
+    srcset="{{ url_for('static', filename='about/' ~ name ~ '-thumb.webp') }} {{ thumbnail_width }}w,
+            {{ url_for('static', filename='about/' ~ name ~ '.webp') }} {{ photo_width }}w"
+    sizes="(max-width: 760px) calc(100vw - 40px), (max-width: 1160px) 50vw, 600px"
+    alt="{{ description }}"
+    loading="lazy"
+    decoding="async"
+  />
+{% endmacro %}
+
+{% block content %}
+<section class="about-hero" aria-labelledby="about-heading">
+  {% include "snow_saddle_panorama.html" %}
+  <div class="about-hero__inner">
+    <p class="eyebrow">Community · Education · Conservation · Stewardship</p>
+    <h1 id="about-heading">Access to the outdoors in the Mount Waddington region</h1>
+    <p class="about-hero__intro">
+      The District of Mount Waddington Access Society works to improve access to
+      hiking, climbing, and mountaineering opportunities in the region.
+    </p>
+    <div class="about-hero__actions">
+      <a class="button button--primary" href="{{ url_for('membership_request') }}">Become a Member</a>
+      <a class="button button--secondary" href="{{ url_for('contact') }}">Contact the Society</a>
+    </div>
   </div>
 </section>
 
-<section class="content-section" aria-labelledby="purposes-heading">
-  <p class="eyebrow">Our purposes</p>
-  <h2 id="purposes-heading">Supporting responsible outdoor recreation</h2>
-  <p>The Society's constitution describes these purposes:</p>
-  <div class="purpose-grid">
-    <article class="purpose-card">
-      <h3>Access and trails</h3>
+<section class="content-section about-pillars" aria-label="Society pillars">
+  <article class="about-pillar" aria-labelledby="community-heading">
+    <div class="about-pillar__content">
+      <h2 id="community-heading">Community</h2>
       <p>
-        Promote, develop, improve, and maintain public access to hiking,
-        climbing, and mountaineering opportunities, including trails, wilderness
-        access routes, and climbing areas.
+        Everything starts with community. We believe the outdoors has a unique
+        ability to bring people together, create lasting friendships, and foster
+        a sense of belonging.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Facilities and programs</h3>
       <p>
-        Support community climbing facilities, recreational programs, and
-        infrastructure that facilitate safe and responsible outdoor recreation.
+        Our goal is to build an inclusive and welcoming outdoor recreation
+        community across the Mount Waddington region. Through the community climbing
+        wall, organized hikes, group activities, and volunteer opportunities, we aim
+        to connect people of all ages, backgrounds, and experience levels who share
+        a passion for the outdoors.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Education and stewardship</h3>
       <p>
-        Promote outdoor education, responsible recreation, conservation, and
-        stewardship of natural areas.
+        By building a strong community, we create opportunities for people to learn
+        from one another, share experiences, and discover everything our region has
+        to offer.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Community participation</h3>
+    </div>
+    {{ pillar_photo('mount-st-patrick-hikers', 'A group of hikers looks out from a foggy ridge on Mount St. Patrick') }}
+  </article>
+
+  <article class="about-pillar" aria-labelledby="education-heading">
+    <div class="about-pillar__content">
+      <h2 id="education-heading">Education</h2>
       <p>
-        Encourage volunteering, reduce barriers to outdoor recreation, and
-        cooperate with governments, landowners, organizations, and other
-        stakeholders.
+        A strong community creates opportunities to share knowledge. We believe
+        that everyone should have the chance to develop the skills and confidence
+        needed to safely and responsibly explore the outdoors.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Local knowledge and safety</h3>
       <p>
-        Support community safety and emergency preparedness by sharing local
-        knowledge about wilderness terrain, trails, and access routes with
-        appropriate organizations and authorities.
+        Through mentorship, hands-on learning, and shared experiences, we aim to
+        make outdoor recreation more accessible to newcomers while encouraging
+        experienced members to pass along their knowledge.
       </p>
-    </article>
-    <article class="purpose-card">
-      <h3>Education support</h3>
       <p>
-        Support scholarships, grants, and financial assistance for outdoor
-        recreation, guiding, tourism, and related education, with an emphasis on
-        people who intend to contribute to the Mount Waddington region.
+        Whether someone is learning to climb for the first time, developing backcountry
+        skills, or gaining the confidence to explore independently, education empowers
+        you to take the next step in your outdoor journey.
       </p>
-    </article>
+    </div>
+    {{ pillar_photo('bauza-climbing', 'A roped climber on the rock face at Bauza with a group gathered below') }}
+  </article>
+
+  <article class="about-pillar" aria-labelledby="conservation-heading">
+    <div class="about-pillar__content">
+      <h2 id="conservation-heading">Conservation</h2>
+      <p>
+        The mountains, forests, rivers, and coastlines
+        of the Mount Waddington region are more than places to recreate—they are
+        ecosystems worth protecting.
+      </p>
+      <p>
+        We believe that enjoying the outdoors comes with a responsibility to understand
+        and minimize our impact. By promoting environmental awareness, responsible
+        recreation, and respect for the natural world, we hope to inspire a community
+        that values conservation as much as adventure.
+      </p>
+      <p>
+        Our goal is to ensure that the landscapes we enjoy today remain healthy,
+        accessible, and inspiring for generations to come.
+      </p>
+    </div>
+    {{ pillar_photo('mount-st-patrick-coast', 'Mist drifts over a forested headland and a rocky shoreline', 480, 1067) }}
+  </article>
+
+  <article class="about-pillar" aria-labelledby="stewardship-heading">
+    <div class="about-pillar__content">
+      <h2 id="stewardship-heading">Stewardship</h2>
+      <p>
+        A community that understands and values the natural environment is one that
+        is ready to care for it.
+      </p>
+      <p>
+        Through volunteer trail maintenance, responsible route
+        development, and working alongside First Nations, land managers, and community
+        partners, we aim to make a lasting, positive impact on the places we recreate.
+      </p>
+      <p>
+        We believe that caring for the land is a shared responsibility. By giving our
+        community opportunities to contribute their time, skills, and knowledge, we can
+        help ensure that outdoor recreation and environmental responsibility go hand in hand.
+      </p>
+    </div>
+    {{ pillar_photo('sutton-peak-lookout', 'Two hikers stand on a rocky lookout at Sutton Peak above layers of mountains') }}
+  </article>
+
+  <p class="about-pillars__closing">
+    <strong>
+      Together, we build community. Through community, we share knowledge.
+      Through knowledge, we develop respect. And through respect, we take action.
+    </strong>
+  </p>
+</section>
+
+<section class="about-gallery" aria-labelledby="gallery-heading">
+  <div class="content-section about-gallery__inner">
+    <h2 id="gallery-heading">Explore the North Island</h2>
+    {% set photos = [
+      ('snow-saddle-ridge', 'Snow Saddle', 'A rugged, forested peak with a patch of snow below its cliffs'),
+      ('bauza-climbing', 'Climbing at Bauza', 'A roped climber on a rock face with a group gathered below'),
+      ('mount-st-patrick-hikers', 'Mount St. Patrick', 'A group of hikers looks out from a foggy ridge'),
+      ('mount-st-patrick-coast', 'Mist over the coast', 'Surf breaks around a rocky island below a forested headland'),
+      ('alpine-basin', 'The Blades', 'A hiker crosses a rock slope below jagged peaks'),
+      ('rocky-summit', 'Nathens Needles', 'Two people spread their arms at the top of a rocky spire'),
+      ('sutton-peak-lookout', 'View from Sutton Peak', 'Two hikers stand on a rocky lookout above layers of mountains'),
+      ('sutton-peak-hiker', 'Victoria and Warden', 'A hiker with a backpack faces a steep mountain ridge'),
+      ('whiltilla', 'Whiltilla', 'A hiker raises both arms on a rocky ledge in the mist')
+    ] %}
+    <div class="about-gallery__carousel" data-photo-carousel>
+      <button class="about-gallery__arrow about-gallery__arrow--previous" type="button"
+        aria-label="Previous photo" aria-controls="north-island-photos" data-photo-previous hidden>
+        <span aria-hidden="true">←</span>
+      </button>
+      <button class="about-gallery__arrow about-gallery__arrow--next" type="button"
+        aria-label="Next photo" aria-controls="north-island-photos" data-photo-next hidden>
+        <span aria-hidden="true">→</span>
+      </button>
+      <ul class="about-gallery__track" id="north-island-photos" role="list" tabindex="0" aria-label="North Island photos">
+        {% for name, caption, description in photos %}
+        <li class="about-gallery__slide">
+          <a class="about-gallery__link" href="{{ url_for('static', filename='about/' ~ name ~ '.webp') }}">
+            <img
+              class="about-gallery__image"
+              src="{{ url_for('static', filename='about/' ~ name ~ '-thumb.webp') }}"
+              alt="{{ description }}"
+              loading="lazy"
+              decoding="async"
+            />
+            <span class="about-gallery__caption">{{ caption }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
   </div>
 </section>
+<script src="{{ url_for('static', filename='photo_carousel.js') }}" defer></script>
 {% endblock %}

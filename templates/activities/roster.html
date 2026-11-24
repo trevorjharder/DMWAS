@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import form_tokens with context %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p><a href="{{ url_for('activities.member_detail', activity_id=service.activity.id) }}">Activity workspace</a></p>
+    <h1>Activity roster</h1>
+    <p>{{ service.revision.public_details.title }}</p>
+    <p>{{ total_minutes }} verified volunteer minutes</p>
+
+    {% for row in registrations %}
+    <section class="form-options">
+      <h2>{{ row.display_name or 'Removed account' }}</h2>
+      <p>{{ registration_labels[row.status] }}{% if row.attendance %} · {{ row.attendance|capitalize }}{% endif %}</p>
+      {% if row.renewal_until %}<p>Membership renewal due by {{ deadline_text(row.renewal_until) }}</p>{% endif %}
+      {% if row.offer_expires_at %}<p>Offer deadline {{ deadline_text(row.offer_expires_at) }}</p>{% endif %}
+      {% if row.id in verified %}<p>{{ verified[row.id] }} verified volunteer minutes</p>{% endif %}
+      {% if latest.get(row.id) %}
+      <p>Latest submission {{ latest[row.id].minutes }} minutes · {{ latest[row.id].status|capitalize }}</p>
+      {% if latest[row.id].review_note %}<p>{{ latest[row.id].review_note }}</p>{% endif %}
+      {% endif %}
+
+      {% if row.status == 'requested' and service.signup_open %}
+      <form method="post" action="{{ url_for('.roster_action', activity_id=service.activity.id, registration_id=row.id, action='approve') }}">
+        {{ form_tokens() }}
+        <button class="button button--primary" type="submit">Approve request</button>
+        <button class="button button--secondary" type="submit" formaction="{{ url_for('.roster_action', activity_id=service.activity.id, registration_id=row.id, action='decline') }}">Decline request</button>
+      </form>
+      {% elif row.status in ['confirmed', 'waitlisted', 'offered'] and service.now < service.start %}
+      <form method="post" action="{{ url_for('.roster_action', activity_id=service.activity.id, registration_id=row.id, action='cancel') }}">
+        {{ form_tokens() }}
+        <button class="button button--secondary" type="submit">Cancel registration</button>
+      </form>
+      {% endif %}
+
+      {% if row.status == 'confirmed' and service.now >= service.start %}
+      <form method="post" action="{{ url_for('.roster_action', activity_id=service.activity.id, registration_id=row.id, action='attendance') }}">
+        {{ form_tokens() }}
+        <button class="button button--primary" name="attendance" value="attended" type="submit">Mark attended</button>
+        <button class="button button--secondary" name="attendance" value="absent" type="submit">Mark absent</button>
+      </form>
+      {% endif %}
+      {% if row.attendance == 'attended' and service.end and service.now >= service.end and (not latest.get(row.id) or latest[row.id].status != 'pending') %}
+      <form method="post" action="{{ url_for('.roster_action', activity_id=service.activity.id, registration_id=row.id, action='hours') }}">
+        {{ form_tokens() }}
+        <label for="minutes-{{ row.id }}">Volunteer minutes</label>
+        <input id="minutes-{{ row.id }}" name="minutes" type="number" min="{{ 0 if latest.get(row.id) else 1 }}" max="600000" required />
+        {% if latest.get(row.id) %}
+        <label for="note-{{ row.id }}">Reason for correction</label>
+        <textarea id="note-{{ row.id }}" name="submission_note" rows="2" maxlength="500" required></textarea>
+        {% endif %}
+        <button class="button button--secondary" type="submit">Submit for verification</button>
+      </form>
+      {% endif %}
+    </section>
+    {% else %}<p>No members have registered.</p>{% endfor %}
+  </div>
+</section>
+{% endblock %}

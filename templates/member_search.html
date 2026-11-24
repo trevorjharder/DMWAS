@@ -1,0 +1,26 @@
+{% extends "base.html" %}{% block content %}
+<section class="page-heading">
+<p class="eyebrow">Community Hub</p><h1>Member directory</h1>
+<p>Members will only appear after they explicitly opt in. Only active adult members can browse.</p>
+</section>
+<section class="directory-section">
+<form method="get" class="directory-filters" aria-label="Filter member directory">
+<div><label for="directory-name">Display name</label><input id="directory-name" name="q" maxlength="120" value="{{ result.filters.q }}" /></div>
+<div><label for="directory-interest">Interest</label><select id="directory-interest" name="interest"><option value="">Any interest</option>{% for item in interests %}<option value="{{ item }}" {% if result.filters.interest == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+<div><label for="directory-community">General community</label><input id="directory-community" name="community" maxlength="120" value="{{ result.filters.community }}" /></div>
+<div><label for="directory-goal">Participation goal</label><select id="directory-goal" name="goal"><option value="">Any goal</option>{% for item in goals %}<option value="{{ item }}" {% if result.filters.goal == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+<div class="profile-form-actions"><button class="button button--primary">Search members</button><a href="{{ url_for('member_search') }}">Clear filters</a></div>
+</form>
+<p role="status">Page {{ result.page }} · {{ result.profiles|length }} profiles shown</p>
+{% if result.profiles %}<div class="directory-grid">
+{% for fields in result.profiles %}<article class="community-profile-card">
+{% if fields.photo_url %}<img class="community-profile-photo" src="{{ fields.photo_url }}" width="128" height="128" loading="lazy" alt="Profile photo for {{ fields.display_name }}" />{% endif %}
+<h2><a href="{{ fields.profile_url }}">{{ fields.display_name }}</a></h2>
+{% if fields.community %}<p>{{ fields.community }}</p>{% endif %}
+{% if fields.interests %}<p>{{ fields.interests|join(' · ') }}</p>{% endif %}
+{% if fields.goals %}<p>{{ fields.goals|join(' · ') }}</p>{% endif %}
+<a href="{{ fields.profile_url }}">View profile</a>
+</article>{% endfor %}</div>
+{% else %}<div class="empty-state"><h2>No matching profiles</h2><p>Try a different display name or fewer filters. Only shared fields are searchable.</p><a href="{{ url_for('member_profile_preview') }}">Manage your directory visibility</a></div>{% endif %}
+<nav class="directory-pagination" aria-label="Directory pages">{% if result.has_previous %}<a rel="prev" href="{{ previous_url }}">Previous page</a>{% endif %}{% if result.has_next %}<a rel="next" href="{{ next_url }}">Next page</a>{% endif %}</nav>
+</section>{% endblock %}

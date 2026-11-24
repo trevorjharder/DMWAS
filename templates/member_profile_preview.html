@@ -1,0 +1,34 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <h1>Manage Community Profile</h1>
+  <p>Preview the profile fields you’ve selected to share with other members.</p>
+</section>
+<section class="directory-section">
+  {% if profile %}
+  {% if not eligible %}
+  <p class="hub-status hub-status--paused">Private · Directory access requires an active adult membership</p>
+  {% elif not profile.directory_opt_in %}
+  <p class="hub-status hub-status--paused">Private · Directory sharing is off</p>
+  {% elif profile.status == 'approved' %}
+  <p class="hub-status">Visible in the member directory</p>
+  {% else %}
+  <p class="hub-status hub-status--paused">Hidden from the directory · {{ profile.status|capitalize }}</p>
+  {% endif %}
+  <article class="community-profile-card" aria-label="Member profile preview">
+    <h2>{{ public_fields.display_name }}</h2>
+    {% with section_heading = 'h3' %}
+    {% include "community_profile_fields.html" %}
+    {% endwith %}
+  </article>
+  {% else %}
+  <section class="empty-state">
+    <h2>No profile saved yet</h2>
+    <p>Create a profile and choose visibility settings to preview it.</p>
+  </section>
+  {% endif %}
+  <p class="profile-preview-actions">
+    <a class="button button--primary" href="{{ url_for('member_profile') }}">{{ 'Edit profile' if profile else 'Create profile' }}</a>
+    <a href="{{ url_for('manage_profile') }}">Back to Manage Profile</a>
+  </p>
+</section>
+{% endblock %}

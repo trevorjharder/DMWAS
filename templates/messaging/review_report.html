@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "messaging/_parts.html" import token with context %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <p><a href="{{ url_for('.reports') }}">Message reports</a></p>
+    <h1>{{ title }}</h1>
+    <p>{{ reasons[report.reason] }} · {{ report.status|capitalize }}</p>
+    {% if report.reporter_id %}<p>Reporter {{ 'DMWAS-%06d'|format(report.reporter_id) }}</p>{% endif %}
+    {% if report.subject_id %}<p>Reported member {{ 'DMWAS-%06d'|format(report.subject_id) }}</p>{% endif %}
+    {% if report.note %}<p class="message-body">{{ report.note }}</p>{% endif %}
+    {% if evidence is none %}
+    <form method="post">
+      {{ token() }}
+      <button name="action" value="viewed" type="submit" class="button button--secondary">View submitted evidence</button>
+    </form>
+    {% else %}
+    <h2>Submitted evidence</h2>
+    <ol class="message-list">
+      {% for item in evidence %}
+      <li class="form-options">
+        <p><strong>{{ 'Reporter' if item.from_reporter else 'Other member' }}</strong> · {{ item.sent_at.strftime('%b %d, %Y %H:%M') }} UTC</p>
+        <p class="message-body">{{ item.body }}</p>
+      </li>
+      {% endfor %}
+    </ol>
+    {% endif %}
+    {% if report.status == 'open' %}
+    <form method="post">
+      {{ token() }}
+      <label for="note">Decision note</label><textarea id="note" name="note" rows="3" maxlength="800" required></textarea>
+      <button name="action" value="resolved" type="submit" class="button button--primary">Resolve report</button>
+      <button name="action" value="dismissed" type="submit" class="button button--secondary">Dismiss report</button>
+    </form>
+    {% endif %}
+    <h2>Review history</h2>
+    <ol>
+      {% for entry in event_log %}
+      <li>{{ entry.action|capitalize }} · {{ entry.created_at.strftime('%b %d, %Y %H:%M') }} UTC
+        {% if entry.actor_id %} · {{ 'DMWAS-%06d'|format(entry.actor_id) }}{% endif %}
+        {% if entry.note %}<p class="message-body">{{ entry.note }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
+{% endblock %}

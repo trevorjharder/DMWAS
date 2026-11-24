@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "messaging/_parts.html" import connection_button, pages with context %}
+{% block content %}
+<div class="hub-dashboard">
+  <header class="hub-welcome">
+    <h1>Connections</h1>
+    <a class="button button--primary" href="{{ url_for('member_search') }}">Find members</a>
+  </header>
+  <nav class="directory-pagination" aria-label="Connections">
+    <a href="{{ url_for('.connections') }}" {% if status == 'active' %}aria-current="page"{% endif %}>Requests and connections</a>
+    <a href="{{ url_for('.connections', status='blocked') }}" {% if status == 'blocked' %}aria-current="page"{% endif %}>Blocked members</a>
+    <a href="{{ url_for('.inbox') }}">Messages</a>
+  </nav>
+  <div class="hub-grid">
+    {% for pair in rows %}
+    <article class="hub-card">
+      <h2>{{ names[pair.id] }}</h2>
+      <div class="message-actions">
+      {% if status == 'blocked' %}
+        {{ connection_button(pair.id, 'unblock', 'Unblock member') }}
+      {% elif pair.status == 'accepted' %}
+        <a class="button button--primary" href="{{ url_for('.thread', pair_id=pair.id) }}">Open conversation</a>
+        {{ connection_button(pair.id, 'disconnect', 'Disconnect') }}
+        {{ connection_button(pair.id, 'block', 'Block member') }}
+      {% elif pair.requested_by_low == (pair.low_id == current_user.id) %}
+        <p>Request sent</p>
+        {{ connection_button(pair.id, 'withdraw', 'Withdraw request') }}
+      {% else %}
+        <p>Incoming connection request</p>
+        {{ connection_button(pair.id, 'accept', 'Accept request') }}
+        {{ connection_button(pair.id, 'decline', 'Decline request') }}
+        {{ connection_button(pair.id, 'block', 'Block member') }}
+      {% endif %}
+      </div>
+    </article>
+    {% else %}
+    <p>{{ 'You have no blocked members.' if status == 'blocked' else 'You have no connections or pending requests.' }}</p>
+    {% endfor %}
+  </div>
+  {{ pages(page, has_next, request.endpoint, {'status': status}) }}
+</div>
+{% endblock %}

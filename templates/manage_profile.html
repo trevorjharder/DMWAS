@@ -1,0 +1,19 @@
+{% extends "base.html" %} {% block content %}
+<header class="page-heading">
+  <h1>Manage Profile</h1>
+</header>
+<div class="hub-dashboard">
+  <div class="hub-grid">
+    <section class="hub-card">
+      <h2>Account information</h2>
+      <p>Update your personal details and membership preferences.</p>
+      <a class="button button--secondary" href="{{ url_for('member_account_edit') }}">Edit account information</a>
+    </section>
+    <section class="hub-card">
+      <h2>Community profile</h2>
+      <p>See what other eligible members can see and choose what to share.</p>
+      <a class="button button--primary" href="{{ url_for('member_profile_preview') }}">Manage Community Profile</a>
+    </section>
+  </div>
+</div>
+{% endblock %}

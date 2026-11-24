@@ -4,14 +4,16 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 
 ## Current first-step features
 
-- Public About, Notices, and Contact pages.
-- Member access requests with hashed passwords; requests remain pending until an administrator approves them.
-- Member sign-in and a placeholder private member landing page.
+- Public About, Notices, and Contact pages, including a contact form that emails `inquiries@accessni.ca`.
+- Membership applications with hashed passwords, contact and membership details, and pending approval until an administrator approves them.
+- Optional volunteer and newsletter preferences, versioned consent records, and membership term/payment history.
+- Member sign-in opens the private Resources page.
 - A protected admin page to approve or decline pending requests.
-- Optional email notification to `members@accessni.ca` when SMTP is configured.
+- Optional email notification to `members@accessni.ca` when Resend is configured.
+- Email verification-code password recovery for account holders.
 - PostgreSQL support for Railway, with SQLite as a local-development default.
 
-The About page summarizes the six purposes in the Society constitution provided so far. The public contact page intentionally shows no details until approved contact information is configured. The Notices page is an empty placeholder; notice editing is not implemented.
+The About page summarizes the six purposes in the Society constitution provided so far. The public contact page displays approved contact details when configured and includes a Resend-powered message form. The Notices page is an empty placeholder; notice editing is not implemented.
 
 ## Local development
 
@@ -20,7 +22,7 @@ Use Python 3.12 or newer.
 1. Create and activate a virtual environment.
 2. Install dependencies with `pip install -r requirements.txt`.
 3. Set `SECRET_KEY` to a strong random value for a stable local session.
-4. Create the initial database schema with `flask --app app init-db`.
+4. Apply the versioned database schema with `flask --app app db upgrade`.
 5. Create the first administrator with `flask --app app create-admin`. The command prompts for a username, email, and password without echoing the password.
 6. Run locally with `flask --app app run --debug`.
 7. Run tests with `pytest`.
@@ -33,12 +35,19 @@ The local default database is `dmwas.db` in the project directory. Keep database
 - Set a stable, private `SECRET_KEY` in Railway variables. Do not rely on the local fallback in production, especially with multiple Gunicorn workers.
 - Set `SESSION_COOKIE_SECURE=true` when the service is served over HTTPS.
 - Deploy this repository; the included `Procfile` starts Gunicorn.
-- Run `flask --app app init-db` for a new database, then create the initial admin using `flask --app app create-admin` in an authenticated Railway shell. Do not expose administrator signup publicly.
+- The Procfile runs `flask --app app db upgrade` before Gunicorn starts. Schema changes are managed through reviewed migrations; the app does not create tables at request time. Confirm Railway's Start Command is unset or uses the repository Procfile.
+- Create the initial admin using `flask --app app create-admin` in an authenticated Railway shell. Do not expose administrator signup publicly.
 - Connect `accessNI.ca` in Railway and follow its current domain/DNS instructions. Verify HTTPS before launch.
 
-### Optional SMTP notifications
+The current Railway project is the staging environment in the release pipeline; do not create another staging project or database for this work. Follow [the Community Hub foundation runbook](docs/community_hub_phase_01.md) to verify its database connection and migration/recovery process. In particular, an existing database created by `create_all` must be backed up and deliberately adopted against the initial migration before the migration-based Procfile can start. Promote a tested revision to production only through the existing release pipeline and with explicit approval.
 
-Configure `SMTP_HOST`, `SMTP_PORT` (defaults to `587`), `SMTP_FROM`, and optionally `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_USE_TLS` (defaults to `true`). The recipient defaults to `members@accessni.ca`; it can be changed using `ADMIN_NOTIFICATION_EMAIL`. When SMTP settings are absent, requests are saved normally and a message is written to the application log instead of being emailed.
+The membership application stores date of birth, mailing address, and (for youth applications) parent/guardian contact details. Review and adopt the draft Privacy Information page before collecting this information publicly. Adult/youth eligibility is calculated from date of birth as of the application date; the form does not process the $10 adult membership payment.
+
+### Email delivery with Resend
+
+Configure `RESEND_API_KEY` with the Resend API key and `RESEND_FROM` with a sender address on a domain verified in Resend. Contact-form emails always use `DMWAS <inquiries@accessni.ca>`; other email types use `RESEND_FROM`, with the legacy `SMTP_FROM` variable accepted as a fallback. The API sends over HTTPS, which works on Railway Hobby where outbound SMTP is disabled. Membership request notifications go to `members@accessni.ca` by default; change this with `ADMIN_NOTIFICATION_EMAIL`.
+
+Password-reset verification codes are sent to the account email address. Codes are six digits, expire after 10 minutes, are single-use, and are limited to five attempts; new code requests are limited to one per account per minute. Reset requests use a generic response to avoid confirming whether an email address has an account. When Resend settings are absent, accounts and reset requests continue to work, but email is skipped and logged.
 
 ### Public contact settings
 
@@ -46,10 +55,26 @@ Set any approved public details using `PUBLIC_CONTACT_EMAIL`, `PUBLIC_CONTACT_PH
 
 ## Membership workflow and outstanding decisions
 
-Applicants provide their name, email, optional phone number, username, and password. Passwords are stored as hashes. An account is unable to sign in until an administrator approves it. The admin screen asks the reviewer to confirm that the Society's required checks have been completed.
+Applicants provide their name, email, phone number, community, date of birth, mailing address, membership choice, and account credentials. Youth applicants must provide parent/guardian details and an on-form consent attestation; the application does not independently verify the guardian's identity. Passwords are stored as hashes. An account is unable to sign in until an administrator approves it. The admin screen asks the reviewer to confirm that the Society's required checks have been completed.
 
-The constitution supplied so far contains the Society name and purposes, but does not state membership eligibility, dues, payment confirmation, or approval authority. Before public launch, confirm the Society's membership and approval policy and adjust the access request and admin review flow to match. Dues are not collected online. Declined-request retention/reapplication rules and password recovery are also not yet decided.
+Only active administrator accounts see the Manage Members and Access Requests navigation links, and the corresponding routes enforce administrator access. An administrator can promote an already-approved active member to administrator. Member IDs link to an administrator-only profile with application, consent, membership-term, and payment history.
+
+Optional newsletter consent and volunteer-opportunity contact consent are recorded separately from essential membership communications. Each declaration and optional preference is recorded with a version and timestamp. The Society must provide a process for changing or withdrawing optional preferences before sending those messages.
+
+An administrator approves a new application only after confirming required dues have been received. Adult dues are recorded as paid on approval; youth dues are recorded as waived. Memberships become inactive when their term expires or required dues remain unpaid, and inactive members cannot access member features. An inactive member may sign in only to submit a renewal request; the administrator records payment and approves or declines the pending renewal. A renewal does not restore access until dues are paid or waived and an administrator approves it. Term history preserves prior terms. Voting eligibility is calculated from current age (19 or older) and active, paid membership; accounts without a date of birth are shown as unknown. The bylaws' more-than-one-year director eligibility requirement is separate. The generated member number is based on the account's primary key.
+
+The `/privacy` page is a draft disclosure, not a substitute for Society-approved privacy policy. Before launch, approve the notice, retention schedule, privacy contact, guardian-consent process, membership-term rules, and director eligibility rules. Application acknowledgements are not recreational waivers.
+
+Community Hub Phase 04 adds member-controlled profiles with independent field/photo visibility, opt-in and automatic approval for eligible adult members, owner preview, and profile deletion. Inactive members retain access to their own profile privacy controls while directory access remains restricted to active adults. Phase 05 adds the searchable adult directory. Apply migrations before starting the new app, including when Railway uses a custom Start Command. An existing Phase 03 database must not be stamped directly to the latest migration head. [Phase 05 implementation and migration notes](Docs/community_hub_phase_05.md).
+
+The constitution supplied so far contains the Society name and purposes, but does not state membership eligibility, dues, payment confirmation, or approval authority. The current website follows the owner-confirmed rule that overdue/unpaid accounts are inactive and renewal requires payment confirmation plus administrator approval. Dues are not collected online. Declined-request retention and reapplication rules are not yet decided.
+
+Community Hub Phase 06 adds activity proposals, administrator review, co-organizer approvals, and public activity listings. See the [Phase 06 workflow and migration notes](Docs/community_hub_phase_06.md) for the publication gate and recovery steps.
+
+Community Hub Phase 07 adds member registration, waitlists, attendance, and volunteer-hours verification. See the [Phase 07 workflow and migration notes](Docs/community_hub_phase_07.md) for launch settings, the reconciliation job, and rollback.
+
+Community Hub Phase 08 adds member connections, private messaging, unread email reminders and scoped report review. See the [Phase 08 workflow and migration notes](Docs/community_hub_phase_08.md) for moderation, retention, and rollout settings.
 
 ## Next steps
 
-Before launch, provide approved public contact details, logo/colors/photos, any initial notices, and the Society's membership/approval policy. Choose and test the email delivery service and configure its credentials securely in Railway. Member documents, the member directory, notice editing, password recovery, and online dues payments are outside this first implementation step.
+Before launch, provide approved public contact details, logo/colors/photos, any initial notices, and the Society's membership/approval policy. Configure and test the email delivery service securely in Railway. Member documents, the member directory, notice editing, and online dues payments are outside this first implementation step.

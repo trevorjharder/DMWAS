@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "activities/_parts.html" import pagination, schedule %}
+{% block content %}
+<div class="hub-dashboard">
+  <header class="hub-welcome">
+    <h1>My registrations</h1>
+    <a class="button button--secondary" href="{{ url_for('.notices') }}">Activity notices</a>
+  </header>
+  {% if rows %}
+  <div class="hub-grid">
+    {% for registration, details in rows %}
+    <article class="hub-card">
+      <h2><a href="{{ url_for('.enroll', activity_id=registration.activity_id) }}">{{ details.title if details else 'Activity' }}</a></h2>
+      <p>{{ registration_labels[registration.status] }}</p>
+      {% if details %}{{ schedule(details) }}{% endif %}
+      {% if registration.offer_expires_at %}<p>Offer deadline {{ deadline_text(registration.offer_expires_at) }}</p>{% endif %}
+      {% if registration.renewal_until %}<p>Renew by {{ deadline_text(registration.renewal_until) }}</p>{% endif %}
+      {% if registration.attendance %}<p>Attendance {{ registration.attendance|capitalize }}</p>{% endif %}
+      {% if registration.id in verified %}<p>{{ verified[registration.id] }} verified volunteer minutes</p>{% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p>You have no activity registrations.</p>
+  <a href="{{ url_for('activities.public_list') }}">Browse activities</a>
+  {% endif %}
+  {{ pagination(page, has_next, request.endpoint, {}) }}
+</div>
+{% endblock %}

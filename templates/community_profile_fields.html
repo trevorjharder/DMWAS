@@ -1,0 +1,15 @@
+{% if public_fields.photo_url %}
+<img class="community-profile-photo" src="{{ public_fields.photo_url }}" alt="Profile photo for {{ public_fields.display_name }}" width="128" height="128" />
+{% endif %}
+{% if public_fields.biography %}
+<section><{{ section_heading }}>About</{{ section_heading }}><p>{{ public_fields.biography }}</p></section>
+{% endif %}
+{% if public_fields.community %}
+<p><strong>General area:</strong> {{ public_fields.community }}</p>
+{% endif %}
+{% if public_fields.interests %}
+<section><{{ section_heading }}>Interests</{{ section_heading }}><ul>{% for interest in public_fields.interests %}<li>{{ interest }}</li>{% endfor %}</ul></section>
+{% endif %}
+{% if public_fields.goals %}
+<section><{{ section_heading }}>Participation goals</{{ section_heading }}><ul>{% for goal in public_fields.goals %}<li>{{ goal }}</li>{% endfor %}</ul></section>
+{% endif %}

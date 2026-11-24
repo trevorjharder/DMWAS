@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "messaging/_parts.html" import pages %}
+{% block content %}
+<div class="hub-dashboard">
+  <header class="hub-welcome"><h1>Messages</h1></header>
+  {% if network_active %}
+  <nav class="directory-pagination" aria-label="Messaging">
+    <a href="{{ url_for('.connections') }}">Connections</a>
+    <a href="{{ url_for('.preferences') }}">Email reminders</a>
+  </nav>
+  {% else %}
+  <p>Your existing conversations are available to read while your membership is inactive.</p>
+  {% if can_request_renewal %}<p><a href="{{ url_for('membership_renewal') }}">Renew membership</a></p>{% endif %}
+  {% endif %}
+  <div class="hub-grid">
+    {% for pair in rows %}
+    <article class="hub-card">
+      <h2><a href="{{ url_for('.thread', pair_id=pair.id) }}">{{ names[pair.id] }}</a></h2>
+      {% if unread.get(pair.id) %}<p>{{ unread[pair.id] }} unread {{ 'message' if unread[pair.id] == 1 else 'messages' }}</p>{% endif %}
+    </article>
+    {% else %}<p>You have no conversations.</p>{% endfor %}
+  </div>
+  {{ pages(page, has_next, request.endpoint) }}
+</div>
+{% endblock %}

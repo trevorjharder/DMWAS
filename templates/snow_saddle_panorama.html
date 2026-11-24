@@ -1,0 +1,16 @@
+<picture class="about-hero__photo">
+  <source
+    media="(max-width: 760px)"
+    srcset="{{ url_for('static', filename='about/snow-saddle-panorama-mobile.webp') }}"
+  />
+  <img
+    src="{{ url_for('static', filename='about/snow-saddle-panorama.webp') }}"
+    srcset="{{ url_for('static', filename='about/snow-saddle-panorama-medium.webp') }} 1440w,
+            {{ url_for('static', filename='about/snow-saddle-panorama.webp') }} 2200w"
+    sizes="100vw"
+    width="2200"
+    height="1467"
+    fetchpriority="high"
+    alt="Layers of blue mountain ridges beneath a cloud bank, seen from Snow Saddle"
+  />
+</picture>

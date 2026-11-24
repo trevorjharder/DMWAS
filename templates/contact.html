@@ -1,12 +1,17 @@
-{% extends "base.html" %} {% block content %}
-<section class="page-heading">
-  <p class="eyebrow">Get in touch</p>
-  <h1>Contact the Society</h1>
-  <p>
-    For questions about the Society, outdoor access, or its purposes, use the
-    contact details below.
-  </p>
+{% extends "base.html" %}
+{% block content %}
+<section class="about-hero" aria-labelledby="contact-heading">
+  {% include "snow_saddle_panorama.html" %}
+  <div class="about-hero__inner about-hero__inner--centered">
+    <p class="eyebrow">Get in touch</p>
+    <h1 id="contact-heading">Contact the Society</h1>
+    <p class="about-hero__intro">
+      Send us a message about the Society, outdoor access, or our activities.
+    </p>
+  </div>
 </section>
+{% if config.PUBLIC_CONTACT_EMAIL or config.PUBLIC_CONTACT_PHONE or
+config.PUBLIC_CONTACT_ADDRESS %}
 <section class="contact-card">
   {% if config.PUBLIC_CONTACT_EMAIL %}
   <p>
@@ -27,12 +32,57 @@
     {% for line in config.PUBLIC_CONTACT_ADDRESS.splitlines() %}{{ line }}{% if
     not loop.last %}<br />{% endif %}{% endfor %}
   </p>
-  {% endif %} {% if not config.PUBLIC_CONTACT_EMAIL and not
-  config.PUBLIC_CONTACT_PHONE and not config.PUBLIC_CONTACT_ADDRESS %}
-  <p>
-    Public contact details will be added after the Society confirms what should
-    be published.
-  </p>
   {% endif %}
+</section>
+{% endif %}
+<section class="auth-layout">
+  <div class="auth-card auth-card--wide">
+    <h2 class="contact-form__heading">Send us a message</h2>
+    <form method="post" action="{{ url_for('contact') }}">
+      <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ session.get('csrf_token', '') }}"
+      />
+      <div class="contact-form__trap" aria-hidden="true">
+        <label for="website">Leave this field empty</label>
+        <input id="website" name="website" tabindex="-1" autocomplete="off" />
+      </div>
+      <label for="name">Your name</label>
+      <input
+        id="name"
+        name="name"
+        autocomplete="name"
+        maxlength="120"
+        value="{{ contact_values.name|default('') }}"
+        required
+      />
+      <label for="email">Your email address</label>
+      <input
+        id="email"
+        name="email"
+        type="email"
+        autocomplete="email"
+        maxlength="254"
+        value="{{ contact_values.email|default('') }}"
+        required
+      />
+      <label for="subject">Subject</label>
+      <input
+        id="subject"
+        name="subject"
+        maxlength="160"
+        value="{{ contact_values.subject|default('') }}"
+        required
+      />
+      <label for="message">Message</label>
+      <textarea id="message" name="message" rows="7" maxlength="5000" required>
+{{ contact_values.message|default('') }}</textarea
+      >
+      <button class="button button--primary button--full" type="submit">
+        Send message
+      </button>
+    </form>
+  </div>
 </section>
 {% endblock %}

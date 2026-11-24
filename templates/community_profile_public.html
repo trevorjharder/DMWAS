@@ -1,0 +1,28 @@
+{% extends "base.html" %} {% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Directory</p>
+  <h1>{{ public_fields.display_name }}</h1>
+</section>
+<section class="directory-section">
+  <article class="community-profile-card" aria-label="Member profile">
+    {% with section_heading = 'h2' %}
+    {% include "community_profile_fields.html" %}
+    {% endwith %}
+  </article>
+  <p class="form-hint">Contact information and verified membership identity are not displayed.</p>
+  {% if config.COMMUNITY_MESSAGING_ENABLED and connection_target %}
+    {% if connection and connection.status == 'accepted' %}
+    <p><a class="button button--primary" href="{{ url_for('messaging.thread', pair_id=connection.id) }}">Open conversation</a></p>
+    {% elif connection and connection.status == 'pending' %}
+    <p><a href="{{ url_for('messaging.connections') }}">View connection request</a></p>
+    {% elif not connection %}
+    <form method="post" action="{{ url_for('messaging.request_connection', user_id=connection_target) }}">
+      <input type="hidden" name="csrf_token" value="{{ session.get('csrf_token', '') }}" />
+      <button class="button button--primary" type="submit">Send connection request</button>
+      <p class="form-hint">The recipient will see your community profile display name.</p>
+    </form>
+    {% endif %}
+  {% endif %}
+  <a href="{{ url_for('member_search') }}">Back to directory</a>
+</section>
+{% endblock %}

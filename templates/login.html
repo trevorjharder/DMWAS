@@ -1,9 +1,14 @@
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %}
+{% block content %}
+<section class="about-hero" aria-labelledby="login-heading">
+  {% include "snow_saddle_panorama.html" %}
+  <div class="about-hero__inner about-hero__inner--centered">
+    <p class="eyebrow">Members</p>
+    <h1 id="login-heading">Member sign in</h1>
+  </div>
+</section>
 <section class="auth-layout">
   <div class="auth-card">
-    <p class="eyebrow">Members</p>
-    <h1>Member sign in</h1>
-    <p>Sign in with an approved Society account.</p>
     <form
       method="post"
       action="{{ url_for('login', next=request.args.get('next', '')) }}"
@@ -33,6 +38,9 @@
         Sign in
       </button>
     </form>
+    <p class="auth-card__footnote">
+      <a href="{{ url_for('forgot_password') }}">Forgot your password?</a>
+    </p>
     <p class="auth-card__footnote">
       Need an account?
       <a href="{{ url_for('membership_request') }}">Request member access</a>
