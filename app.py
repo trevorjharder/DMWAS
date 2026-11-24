@@ -810,8 +810,12 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         if not session.get("csrf_token"):
             session["csrf_token"] = secrets.token_urlsafe(32)
         current_user = g.get("current_user")
+        can_review_members = has_capability(current_user, Capability.ADMIN_REVIEW)
         return {
             "current_user": current_user,
+            "can_access_member_area": has_capability(current_user, Capability.ACCOUNT_ACCESS),
+            "can_manage_profile": has_capability(current_user, Capability.PROFILE_MANAGEMENT),
+            "can_review_members": can_review_members,
             "can_read_messages": app.config["COMMUNITY_MESSAGING_ENABLED"] and history_access(current_user),
             "can_request_renewal": has_capability(current_user, Capability.RENEWAL_REQUEST),
             "can_review_message_reports": (
@@ -823,7 +827,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             ),
             "can_use_activity_workspace": (
                 has_capability(current_user, Capability.ACTIVITY_PROPOSAL)
-                or has_capability(current_user, Capability.ADMIN_REVIEW)
+                or can_review_members
             ),
             "can_access_adult_hub": has_capability(
                 current_user, Capability.ADULT_DIRECTORY

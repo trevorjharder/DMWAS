@@ -64,9 +64,6 @@
           {% if request.endpoint == 'member_home' %}aria-current="page"{% endif %}
           >Member area</a
         >
-        {% if request.endpoint == 'member_home' %}
-        <a href="{{ url_for('manage_profile') }}">Manage Profile</a>
-        {% endif %}
         {% if current_user.is_admin %}<a href="{{ url_for('admin_requests') }}"
           >Admin</a
         >{% endif %}
@@ -85,11 +82,12 @@
       </nav>
     </header>
 
-    {% if current_user and current_user.status == 'active' and request.endpoint not in ['about', 'member_home'] %}
+    {% if can_manage_profile %}
     {% set endpoint = request.endpoint or '' %}
     <nav class="member-nav" aria-label="Member navigation">
       <div class="member-nav__inner">
-        <a href="{{ url_for('member_home') }}">Member area</a>
+        {% if can_access_member_area %}
+        <a href="{{ url_for('member_home') }}" {% if endpoint == 'member_home' %}aria-current="page"{% endif %}>Member area</a>
         <a
           href="{{ url_for('member_resources') }}"
           {%
@@ -103,6 +101,7 @@
           %}
           >Resources</a
         >
+        {% endif %}
         <a
           href="{{ url_for('manage_profile') }}"
           {% if endpoint == 'manage_profile' %}aria-current="page"
@@ -144,7 +143,7 @@
         {% if can_read_messages %}
         <a href="{{ url_for('messaging.inbox') }}" {% if request.blueprint == 'messaging' and request.path.startswith('/member/') %}aria-current="page"{% endif %}>Messages</a>
         {% endif %}
-        {% if current_user.is_admin %}
+        {% if can_review_members %}
         <a
           href="{{ url_for('activities.admin_list') }}"
           {%

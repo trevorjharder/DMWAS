@@ -93,9 +93,10 @@ def test_public_pages_render(client):
         response = client.get(path)
         assert response.status_code == 200
         assert b"District of Mount Waddington" in response.data
+        assert b'aria-label="Member navigation"' not in response.data
 
 
-def test_about_and_placeholder_hide_member_navigation(app, client, make_user):
+def test_signed_in_member_navigation_appears_on_public_and_member_pages(app, client, make_user):
     with app.app_context():
         admin = make_user(is_admin=True)
         db.session.add(admin)
@@ -103,24 +104,24 @@ def test_about_and_placeholder_hide_member_navigation(app, client, make_user):
         admin_id = admin.id
 
     login_as(client, admin_id)
-    about = client.get("/", follow_redirects=True)
-    assert about.status_code == 200
-    assert b"Sign out" in about.data
-    assert b'aria-label="Member navigation"' not in about.data
-    assert b'href="/member"' in about.data
-
-    member_area = client.get("/member")
-    assert member_area.status_code == 200
-    header, main = member_area.data.split(b'<main id="main-content">', 1)
-    assert b"The MemberZone is coming soon." in main
-    assert b'aria-label="Member navigation"' not in member_area.data
-    assert b'href="/admin/requests"' in header
-    assert b'href="/member/profile">Manage Profile</a>' in header
-    assert client.get("/member/profile").status_code == 200
-
-    resources = client.get("/member/resources")
-    assert resources.status_code == 200
-    assert b'aria-label="Member navigation"' in resources.data
+    for path in ("/", "/notices", "/contact", "/donate", "/member",
+                 "/member/resources", "/member/profile", "/admin/requests"):
+        response = client.get(path, follow_redirects=True)
+        assert response.status_code == 200
+        header, body = response.data.split(b"</header>", 1)
+        main_nav = header.split(b'aria-label="Main navigation">', 1)[1]
+        member_nav = body.split(b"</nav>", 1)[0]
+        assert b"Sign out" in main_nav
+        assert b'href="/member"' in main_nav
+        assert b'href="/admin/requests"' in main_nav
+        assert b"Manage Profile" not in main_nav
+        assert b'aria-label="Member navigation"' in member_nav
+        assert b'href="/member/profile"' in member_nav
+        assert b"Manage Profile" in member_nav
+        assert b"Search Members" in member_nav
+        if path == "/member":
+            assert b'aria-current="page">Member area' in member_nav
+            assert b"The MemberZone is coming soon." in body
 
 
 def test_donate_page_shows_etransfer_email_and_equipment_contact_note(client):
@@ -807,7 +808,7 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
     assert member_home.status_code == 200
     assert b"The MemberZone is coming soon." in member_home.data
     assert b"Membership status" not in member_home.data
-    assert b'aria-label="Member navigation"' not in member_home.data
+    assert b'aria-label="Member navigation"' in member_home.data
     assert client.get("/member/resources").status_code == 200
     assert client.get("/members/search?q=Test").status_code == 200
 
@@ -1708,6 +1709,10 @@ def test_overdue_member_is_inactive_until_payment_and_admin_approves_renewal(
     renewal_page = client.get("/membership/renew")
     assert renewal_page.status_code == 200
     assert b"Adult annual dues are $10" in renewal_page.data
+    member_nav = renewal_page.data.split(b'aria-label="Member navigation">', 1)[1].split(b"</nav>", 1)[0]
+    assert b"Manage Profile" in member_nav
+    assert b'href="/member/resources"' not in member_nav
+    assert b"Search Members" not in member_nav
 
     set_csrf(client)
     request_response = client.post(
