@@ -55,7 +55,7 @@ and pagination.
   tables, indexes and rollback.
 - `templates/member_profile_edit.html`, `member_profile_preview.html`,
   `community_profile_public.html`, `admin_community_profiles.html`: profile flows.
-- `templates/base.html`, `member_home.html`, `membership_renewal.html`,
+- `templates/base.html`, `membership_renewal.html`,
   `privacy.html`, and `static/styles.css`: navigation, renewal access, draft notice
   and responsive profile/photo styling.
 - `requirements.txt`: Pillow for bounded image decoding and metadata removal.

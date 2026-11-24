@@ -112,16 +112,18 @@ def test_signed_in_member_navigation_appears_on_public_and_member_pages(app, cli
         main_nav = header.split(b'aria-label="Main navigation">', 1)[1]
         member_nav = body.split(b"</nav>", 1)[0]
         assert b"Sign out" in main_nav
-        assert b'href="/member"' in main_nav
+        assert b'href="/member"' not in main_nav
         assert b'href="/admin/requests"' in main_nav
         assert b"Manage Profile" not in main_nav
         assert b'aria-label="Member navigation"' in member_nav
+        assert b'href="/member"' not in member_nav
+        assert b'href="/member/resources"' in member_nav
         assert b'href="/member/profile"' in member_nav
         assert b"Manage Profile" in member_nav
         assert b"Search Members" in member_nav
-        if path == "/member":
-            assert b'aria-current="page">Member area' in member_nav
-            assert b"The MemberZone is coming soon." in body
+        if path in ("/member", "/member/resources"):
+            assert b'href="/member/resources" aria-current="page">Resources</a>' in member_nav
+            assert b"<h1>Resources</h1>" in body
 
 
 def test_donate_page_shows_etransfer_email_and_equipment_contact_note(client):
@@ -803,13 +805,12 @@ def test_admin_can_approve_request_and_member_can_sign_in(client, app):
         },
     )
     assert response.status_code == 302
-    assert response.location.endswith("/member")
-    member_home = client.get(response.location)
-    assert member_home.status_code == 200
-    assert b"The MemberZone is coming soon." in member_home.data
-    assert b"Membership status" not in member_home.data
-    assert b'aria-label="Member navigation"' in member_home.data
-    assert client.get("/member/resources").status_code == 200
+    assert response.location == "/member/resources"
+    resources = client.get(response.location)
+    assert resources.status_code == 200
+    assert b"<h1>Resources</h1>" in resources.data
+    assert b"Membership status" not in resources.data
+    assert b'aria-label="Member navigation"' in resources.data
     assert client.get("/members/search?q=Test").status_code == 200
 
 
@@ -901,7 +902,8 @@ def test_manage_profile_opens_community_preview_before_editing(client, app, make
         member_id = member.id
 
     login_as(client, member_id)
-    assert b'href="/member/profile"' in client.get("/member").data
+    assert client.get("/member").location == "/member/resources"
+    assert b'href="/member/profile"' in client.get("/member/resources").data
     manage = client.get("/member/profile")
     assert manage.status_code == 200
     assert b"<h1>Manage Profile</h1>" in manage.data
@@ -1023,7 +1025,7 @@ def test_member_account_edit_saves_private_details_without_changing_sign_in(clie
         "username": "synthetic-1",
         "password": "Synthetic-Password-1",
     })
-    assert response.location == "/member"
+    assert response.location == "/member/resources"
 
 
 def test_legacy_account_edit_saves_preferences_for_signed_in_member(client, app, make_user):
@@ -1766,8 +1768,8 @@ def test_overdue_member_is_inactive_until_payment_and_admin_approves_renewal(
         },
     )
     assert member_login.status_code == 302
-    assert member_login.location.endswith("/member")
-    assert client.get("/member").status_code == 200
+    assert member_login.location == "/member/resources"
+    assert client.get(member_login.location).status_code == 200
 
 
 def test_migration_stamp_adopts_existing_complete_schema(tmp_path):

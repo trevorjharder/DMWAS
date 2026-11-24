@@ -20,7 +20,7 @@ Build/commit: __________  Tester: __________  Date: __________
 
 Test as B, viewing A's profile.
 
-- [ ] Open **Member area → Browse member directory**: the directory loads without an error.
+- [ ] Choose **Search Members** in the member navigation: the directory loads without an error.
 - [ ] Save A's profile with directory opt-in OFF: A does not appear.
 - [ ] Turn A's opt-in ON and save: A appears automatically, without administrator approval.
 - [ ] Edit A's display name and save: the new alias appears and remains approved.

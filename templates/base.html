@@ -59,11 +59,6 @@
           <button class="nav-button" type="submit">Sign out</button>
         </form>
         {% elif current_user and current_user.status == 'active' %}
-        <a
-          href="{{ url_for('member_home') }}"
-          {% if request.endpoint == 'member_home' %}aria-current="page"{% endif %}
-          >Member area</a
-        >
         {% if current_user.is_admin %}<a href="{{ url_for('admin_requests') }}"
           >Admin</a
         >{% endif %}
@@ -86,21 +81,8 @@
     {% set endpoint = request.endpoint or '' %}
     <nav class="member-nav" aria-label="Member navigation">
       <div class="member-nav__inner">
-        {% if can_access_member_area %}
-        <a href="{{ url_for('member_home') }}" {% if endpoint == 'member_home' %}aria-current="page"{% endif %}>Member area</a>
-        <a
-          href="{{ url_for('member_resources') }}"
-          {%
-          if
-          endpoint
-          in
-          ['member_resources']
-          %}aria-current="page"
-          {%
-          endif
-          %}
-          >Resources</a
-        >
+        {% if can_access_resources %}
+        <a href="{{ url_for('member_resources') }}" {% if endpoint == 'member_resources' %}aria-current="page"{% endif %}>Resources</a>
         {% endif %}
         <a
           href="{{ url_for('manage_profile') }}"

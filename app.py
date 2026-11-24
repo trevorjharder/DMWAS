@@ -743,7 +743,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         can_review_members = has_capability(current_user, Capability.ADMIN_REVIEW)
         return {
             "current_user": current_user,
-            "can_access_member_area": has_capability(current_user, Capability.ACCOUNT_ACCESS),
+            "can_access_resources": has_capability(current_user, Capability.ACCOUNT_ACCESS),
             "can_manage_profile": has_capability(current_user, Capability.PROFILE_MANAGEMENT),
             "can_review_members": can_review_members,
             "can_read_messages": app.config["COMMUNITY_MESSAGING_ENABLED"] and history_access(current_user),
@@ -813,7 +813,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             user = g.get("current_user")
             if has_capability(user, Capability.ACCOUNT_ACCESS):
                 session.pop("renewal_only", None)
-                return redirect(url_for("member_home"))
+                return redirect(url_for("member_resources"))
             if not session.get("renewal_only") or not has_capability(
                 user, Capability.RENEWAL_REQUEST
             ):
@@ -947,7 +947,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     flash("You are signed in.", "success")
                     if destination.startswith("/") and not destination.startswith("//"):
                         return redirect(destination)
-                    return redirect(url_for("member_home"))
+                    return redirect(url_for("member_resources"))
                 can_renew = has_capability(user, Capability.RENEWAL_REQUEST)
                 has_history = (
                     app.config["COMMUNITY_MESSAGING_ENABLED"] and history_access(user)
@@ -1358,7 +1358,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @app.get("/member")
     @login_required
     def member_home():
-        return render_template("member_home.html", title="Member area")
+        return redirect(url_for("member_resources"))
 
     @app.get("/member/profile")
     @profile_owner_required

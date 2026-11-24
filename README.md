@@ -7,7 +7,7 @@ A small standalone Flask website for the District of Mount Waddington Access Soc
 - Public About, Notices, and Contact pages, including a contact form that emails `inquiries@accessni.ca`.
 - Membership applications with hashed passwords, contact and membership details, and pending approval until an administrator approves them.
 - Optional volunteer and newsletter preferences, versioned consent records, and membership term/payment history.
-- Member sign-in and a placeholder private member landing page.
+- Member sign-in opens the private Resources page.
 - A protected admin page to approve or decline pending requests.
 - Optional email notification to `members@accessni.ca` when Resend is configured.
 - Email verification-code password recovery for account holders.
