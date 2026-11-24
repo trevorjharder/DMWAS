@@ -1450,26 +1450,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         errors = []
 
         if request.method == "POST":
-            email = request.form.get("email", "").strip().lower()
-            username = request.form.get("username", "").strip().lower()
             phone = request.form.get("phone", "").strip()
-            password = request.form.get("password", "")
-            confirm_password = request.form.get("confirm_password", "")
-            email_changed = email != user.email
-            username_changed = username != user.username
-            if email_changed and (len(email) > 254 or not EMAIL_PATTERN.fullmatch(email)):
-                errors.append("Enter a valid email address of up to 254 characters.")
-            if username_changed and not re.fullmatch(r"[a-z0-9_.-]{3,40}", username):
-                errors.append("Choose a username of 3–40 letters, numbers, dots, underscores, or hyphens.")
             if len(phone) > 40:
                 errors.append("Enter a phone number of up to 40 characters.")
-            if ((email_changed or username_changed or password or confirm_password)
-                    and not user.check_password(request.form.get("current_password", ""))):
-                errors.append("Enter your current password to change your sign-in details.")
-            if password and len(password) < MIN_PASSWORD_LENGTH:
-                errors.append(f"Use at least {MIN_PASSWORD_LENGTH} characters for your new password.")
-            if password != confirm_password:
-                errors.append("The new passwords do not match.")
 
             if details:
                 first_name = request.form.get("first_name", "").strip()
@@ -1507,17 +1490,8 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     errors.append("Enter your parent or guardian's contact details.")
 
             if not errors:
-                if email_changed or password:
-                    PasswordResetCode.query.filter_by(user_id=user.id, used_at=None).update(
-                        {"used_at": datetime.now(timezone.utc).replace(tzinfo=None)},
-                        synchronize_session=False,
-                    )
                 user.full_name = full_name
-                user.email = email
-                user.username = username
                 user.phone = phone or None
-                if password:
-                    user.set_password(password)
 
                 if details:
                     details.first_name = first_name
@@ -1546,14 +1520,9 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     preferences.guardian_name = guardian_name or None
                     preferences.guardian_email = guardian_email or None
 
-                try:
-                    db.session.commit()
-                except IntegrityError:
-                    db.session.rollback()
-                    errors.append("That email or username is already in use.")
-                else:
-                    flash("Your account information was saved.", "success")
-                    return redirect(url_for("manage_profile"))
+                db.session.commit()
+                flash("Your account information was saved.", "success")
+                return redirect(url_for("manage_profile"))
 
         for error in errors:
             flash(error, "error")
@@ -1565,7 +1534,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             activities=MEMBERSHIP_ACTIVITIES,
             volunteer_interests=VOLUNTEER_INTERESTS,
             show_guardian=show_guardian,
-            min_password_length=MIN_PASSWORD_LENGTH,
         ), 400 if errors else 200
 
     @app.post("/member/profile")

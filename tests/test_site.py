@@ -956,7 +956,7 @@ def test_manage_profile_opens_community_preview_before_editing(client, app, make
     assert b'href="/member/profile/community/edit">Edit profile</a>' in preview.data
 
 
-def test_member_account_can_update_private_details_and_sign_in(client, app, make_user):
+def test_member_account_edit_saves_private_details_without_changing_sign_in(client, app, make_user):
     with app.app_context():
         member = make_user()
         db.session.add(member)
@@ -974,7 +974,9 @@ def test_member_account_can_update_private_details_and_sign_in(client, app, make
     login_as(client, member_id)
     edit = client.get(url)
     assert edit.status_code == 200
-    assert b"synthetic-1@example.test" in edit.data
+    for name in (b"email", b"username", b"current_password", b"password", b"confirm_password"):
+        assert b'name="' + name + b'"' not in edit.data
+    assert b"to correct your date of birth or membership type" not in edit.data
     assert b"1 Example Street" in edit.data
     assert edit.headers["Cache-Control"] == "private, no-store"
 
@@ -991,25 +993,19 @@ def test_member_account_can_update_private_details_and_sign_in(client, app, make
         "volunteer_contact_ok": "yes",
         "newsletter_opt_in": "yes",
         "username": "Updated-Member",
+        "current_password": "Synthetic-Password-1",
         "password": "New-Synthetic-Password",
         "confirm_password": "New-Synthetic-Password",
         "date_of_birth": "2015-01-01",
         "membership_type": "youth",
     }
-    rejected = client.post(url, data=updates)
-    assert rejected.status_code == 400
-    assert b"Enter your current password" in rejected.data
-    assert b"New-Synthetic-Password" not in rejected.data
-    with app.app_context():
-        assert db.session.get(User, member_id).full_name == "Synthetic Member 1"
-
-    response = client.post(url, data={**updates, "current_password": "Synthetic-Password-1"})
+    response = client.post(url, data=updates)
     assert response.location == "/member/profile"
     with app.app_context():
         member = db.session.get(User, member_id)
         details = member.membership_details
         assert (member.full_name, member.phone) == ("Updated Member", "250-555-0142")
-        assert (member.email, member.username) == ("updated@example.test", "updated-member")
+        assert (member.email, member.username) == ("synthetic-1@example.test", "synthetic-1")
         assert (details.first_name, details.last_name) == ("Updated", "Member")
         assert (details.community, details.mailing_address) == ("Port Hardy", "2 Example Street")
         assert details.activities == ["Hiking"]
@@ -1018,19 +1014,19 @@ def test_member_account_can_update_private_details_and_sign_in(client, app, make
         assert {(item.consent_type, item.granted) for item in member.consent_records} == {
             ("volunteer_contact", True), ("newsletter", True),
         }
-        assert PasswordResetCode.query.one().used_at is not None
+        assert PasswordResetCode.query.one().used_at is None
 
     assert client.post("/logout", data={"csrf_token": "test-csrf-token"}).status_code == 302
     set_csrf(client)
     response = client.post("/login", data={
         "csrf_token": "test-csrf-token",
-        "username": "updated-member",
-        "password": "New-Synthetic-Password",
+        "username": "synthetic-1",
+        "password": "Synthetic-Password-1",
     })
     assert response.location == "/member"
 
 
-def test_legacy_account_edit_rejects_duplicate_email_and_saves_preferences(client, app, make_user):
+def test_legacy_account_edit_saves_preferences_for_signed_in_member(client, app, make_user):
     with app.app_context():
         member, other = make_user(), make_user()
         member.membership_details = None
@@ -1044,21 +1040,9 @@ def test_legacy_account_edit_rejects_duplicate_email_and_saves_preferences(clien
     updates = {
         "csrf_token": "test-csrf-token",
         "full_name": "Legacy Member",
-        "username": "synthetic-1",
-        "email": "synthetic-1@example.test",
         "newsletter_opt_in": "yes",
         "user_id": other_id,
     }
-    duplicate = client.post(url, data={
-        **updates,
-        "email": "synthetic-2@example.test",
-        "current_password": "Synthetic-Password-1",
-    })
-    assert duplicate.status_code == 400
-    assert b"already in use" in duplicate.data
-    with app.app_context():
-        assert db.session.get(User, member_id).membership_preferences is None
-
     assert client.post(url, data=updates).status_code == 302
     del updates["newsletter_opt_in"]
     assert client.post(url, data=updates).status_code == 302

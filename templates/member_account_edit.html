@@ -27,7 +27,6 @@
         {% else %}
         {{ field('full_name', 'Full name', current_user.full_name, 120, 'name') }}
         {% endif %}
-        {{ field('email', 'Email', current_user.email, 254, 'email', 'email') }}
         {{ field('phone', 'Phone', current_user.phone, 40, 'tel', 'tel', false) }}
         {% if details %}
         {{ field('community', 'Community of residence', details.community, 120, 'address-level2') }}
@@ -70,25 +69,11 @@
         <label class="check-label"><input type="checkbox" name="newsletter_opt_in" value="yes" {% if newsletter %}checked{% endif %} />Send me the Society newsletter</label>
       </fieldset>
 
-      <fieldset class="form-options">
-        <legend>Sign-in details</legend>
-        {{ field('username', 'Username', current_user.username, 40, 'username') }}
-        <p class="form-hint" id="current-password-help">Enter your current password if you change your email, username, or password.</p>
-        <label for="current_password">Current password</label>
-        <input id="current_password" name="current_password" type="password" autocomplete="current-password" aria-describedby="current-password-help" />
-        <label for="password">New password</label>
-        <input id="password" name="password" type="password" autocomplete="new-password" minlength="{{ min_password_length }}" aria-describedby="new-password-help" />
-        <p class="form-hint" id="new-password-help">Use at least {{ min_password_length }} characters. Leave both new password fields blank to keep your current password.</p>
-        <label for="confirm_password">Confirm new password</label>
-        <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="{{ min_password_length }}" />
-      </fieldset>
-
       <div class="profile-form-actions">
         <button class="button button--primary" type="submit">Save account information</button>
         <a href="{{ url_for('manage_profile') }}">Cancel</a>
       </div>
     </form>
-    <p class="auth-card__footnote"><a href="{{ url_for('contact') }}">Contact the Society</a> to correct your date of birth or membership type.</p>
   </div>
 </section>
 {% endblock %}
