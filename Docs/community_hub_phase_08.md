@@ -40,9 +40,9 @@
   day, and 30 messages per minute per account. Blocking remains available
   independently of these limits.
 
-Phase 08 restored the previously tested Phase 05 directory, profile privacy,
-and verified-record paths used by member discovery. It uses the existing
-membership system and Resend delivery integration.
+Phase 08 restored the previously tested Phase 05 directory and profile privacy
+paths used by member discovery. Phase 08 uses the existing membership system
+and Resend delivery integration.
 
 ## Configuration and jobs
 

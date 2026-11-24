@@ -33,7 +33,6 @@ from flask import (
 from flask_migrate import Migrate
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
-from sqlalchemy.orm import selectinload
 from sqlalchemy import and_, or_, func, select, case
 from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -225,7 +224,6 @@ class CommunityProfile(db.Model):
     show_goals = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
     photo = db.deferred(db.Column(db.LargeBinary, nullable=True))
     show_photo = db.Column(db.Boolean, nullable=False, default=False, server_default="false")
-    show_highlights = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     version = db.Column(db.Integer, nullable=False, default=1, server_default="1")
     __mapper_args__ = {"version_id_col": version}
     status = db.Column(db.String(20), nullable=False, default="draft", index=True)
@@ -281,65 +279,6 @@ db.Index("ix_community_profile_directory", CommunityProfile.status,
          CommunityProfile.directory_opt_in, func.lower(CommunityProfile.display_name), CommunityProfile.id)
 
 
-class VerifiedCommunityRecord(db.Model):
-    """Administrator-verified summary; separate from future activity rosters."""
-    id = db.Column(db.Integer, primary_key=True)
-    # Retained as a primary participant for compatibility with Phase 05 data.
-    # Sharing eligibility is determined by participants, not this pointer.
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True)
-    title = db.Column(db.String(160), nullable=False)
-    record_type = db.Column(db.String(20), nullable=False)
-    occurred_on = db.Column(db.Date, nullable=False)
-    volunteer_minutes = db.Column(db.Integer, nullable=True)
-    verified = db.Column(db.Boolean, nullable=False, default=True)
-    shareable = db.Column(db.Boolean, nullable=False, default=False)
-    sensitive = db.Column(db.Boolean, nullable=False, default=False)
-    verified_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    verified_at = db.Column(db.DateTime(timezone=True), nullable=False,
-                            default=lambda: datetime.now(timezone.utc))
-    user = db.relationship("User", foreign_keys=[user_id])
-    participants = db.relationship("VerifiedCommunityRecordParticipant", cascade="all, delete-orphan",
-                                   back_populates="record", order_by="VerifiedCommunityRecordParticipant.user_id")
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if kwargs.get("user_id") is not None and "participants" not in kwargs:
-            self.participants = [VerifiedCommunityRecordParticipant(user_id=kwargs["user_id"])]
-
-
-class VerifiedCommunityRecordParticipant(db.Model):
-    record_id = db.Column(db.Integer, db.ForeignKey("verified_community_record.id", ondelete="CASCADE"), primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), primary_key=True, index=True)
-    record = db.relationship("VerifiedCommunityRecord", back_populates="participants")
-    user = db.relationship("User")
-
-
-class CommunityProfileHighlight(db.Model):
-    profile_id = db.Column(db.Integer, db.ForeignKey("community_profile.id", ondelete="CASCADE"), primary_key=True)
-    record_id = db.Column(db.Integer, db.ForeignKey("verified_community_record.id", ondelete="CASCADE"), primary_key=True)
-    record = db.relationship("VerifiedCommunityRecord")
-    profile = db.relationship("CommunityProfile", backref=db.backref("highlights", cascade="all, delete-orphan"))
-
-
-class VerifiedCommunityRecordAudit(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    record_id = db.Column(db.Integer, db.ForeignKey("verified_community_record.id", ondelete="CASCADE"), nullable=False, index=True)
-    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    snapshot = db.Column(db.JSON, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-
-
-def highlight_options(user_id):
-    return VerifiedCommunityRecord.query.filter_by(verified=True,
-        shareable=True, sensitive=False).filter(VerifiedCommunityRecord.participants.any(user_id=user_id)).order_by(VerifiedCommunityRecord.occurred_on.desc(),
-                                                 VerifiedCommunityRecord.id).all()
-
-
-def profile_query_options(query):
-    return query.options(selectinload(CommunityProfile.highlights).selectinload(
-        CommunityProfileHighlight.record).selectinload(VerifiedCommunityRecord.participants))
-
-
 class DirectoryAccessWindow(db.Model):
     """Shared, bounded per-account discovery quota across web workers."""
     user_id = db.Column(db.Integer, db.ForeignKey("user.id", ondelete="CASCADE"), primary_key=True)
@@ -351,7 +290,7 @@ def eligible_community_profiles():
     latest_term = select(func.max(MembershipTerm.term_number)).where(
         MembershipTerm.user_id == User.id
     ).correlate(User).scalar_subquery()
-    return profile_query_options(CommunityProfile.query).join(User, CommunityProfile.user_id == User.id).join(
+    return CommunityProfile.query.join(User, CommunityProfile.user_id == User.id).join(
         MembershipDetails, MembershipDetails.user_id == User.id
     ).filter(
         CommunityProfile.directory_opt_in.is_(True), CommunityProfile.status == "approved",
@@ -377,15 +316,6 @@ def community_profile_fields(profile: CommunityProfile) -> dict[str, object]:
             fields[key] = value
     if profile.show_photo and profile.photo_present:
         fields["photo_url"] = url_for("community_profile_photo", user_id=profile.user_id)
-    if profile.show_highlights:
-        records = [item.record for item in profile.highlights if any(
-                   participant.user_id == profile.user_id for participant in item.record.participants)
-                   and item.record.verified and item.record.shareable and not item.record.sensitive]
-        fields["highlights"] = [{"title": record.title, "type": record.record_type,
-                                  "date": record.occurred_on.isoformat(),
-                                  **({"volunteer_minutes": record.volunteer_minutes}
-                                     if record.record_type == "volunteer" else {})}
-                                for record in sorted(records, key=lambda r: (r.occurred_on, r.id), reverse=True)]
     return fields
 
 
@@ -1541,8 +1471,7 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
     @profile_owner_required
     def member_profile():
         user = g.current_user
-        profile = profile_query_options(CommunityProfile.query).filter_by(user_id=user.id).with_for_update().first()
-        highlight_records = highlight_options(user.id)
+        profile = CommunityProfile.query.filter_by(user_id=user.id).with_for_update().first()
 
         if request.method == "POST":
             display_name = request.form.get("display_name", "").strip()
@@ -1552,15 +1481,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             requested_goals = list(dict.fromkeys(request.form.getlist("participation_goals")))
             directory_opt_in = request.form.get("directory_opt_in") == "yes"
             errors = []
-
-            try:
-                chosen_highlights = set(int(value) for value in request.form.getlist("highlights"))
-            except ValueError:
-                chosen_highlights = set()
-                errors.append("Choose valid verified highlights.")
-            allowed_highlights = {record.id for record in highlight_records}
-            if len(chosen_highlights) > 10 or not chosen_highlights <= allowed_highlights:
-                errors.append("Choose up to ten of your own verified, shareable highlights.")
 
             if not display_name or len(display_name) > 80:
                 errors.append("Choose a display name of 1–80 characters.")
@@ -1591,7 +1511,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                     profile=profile,
                     interests=COMMUNITY_PROFILE_INTERESTS,
                     goals=COMMUNITY_PROFILE_GOALS,
-                    highlight_records=highlight_records,
                 ), 400
 
             if profile is None:
@@ -1608,13 +1527,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             profile.show_interests = request.form.get("show_interests") == "yes"
             profile.show_goals = request.form.get("show_goals") == "yes"
             profile.show_photo = request.form.get("show_photo") == "yes"
-            profile.show_highlights = request.form.get("show_highlights") == "yes"
-            for selected in list(profile.highlights):
-                if selected.record_id not in chosen_highlights:
-                    profile.highlights.remove(selected)
-            existing_highlights = {item.record_id for item in profile.highlights}
-            for record_id in chosen_highlights - existing_highlights:
-                profile.highlights.append(CommunityProfileHighlight(record_id=record_id))
             if request.form.get("remove_photo") == "yes":
                 profile.photo = None
             elif photo_data is not None:
@@ -1656,14 +1568,13 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
             profile=profile,
             interests=COMMUNITY_PROFILE_INTERESTS,
             goals=COMMUNITY_PROFILE_GOALS,
-            highlight_records=highlight_records,
         )
 
     @app.get("/member/profile/preview")
     @app.get("/member/profile/community")
     @profile_owner_required
     def member_profile_preview():
-        profile = profile_query_options(CommunityProfile.query).filter_by(user_id=g.current_user.id).first()
+        profile = CommunityProfile.query.filter_by(user_id=g.current_user.id).first()
         return render_template(
             "member_profile_preview.html",
             title="Manage Community Profile",
@@ -1896,21 +1807,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
         )
         delete_community_profile(member.id)
         DirectoryAccessWindow.query.filter_by(user_id=member.id).delete(synchronize_session=False)
-        shared_records = VerifiedCommunityRecord.query.options(selectinload(
-            VerifiedCommunityRecord.participants)).filter(or_(
-                VerifiedCommunityRecord.user_id == member.id,
-                VerifiedCommunityRecord.participants.any(user_id=member.id))).all()
-        for record in shared_records:
-            remaining = [p for p in record.participants if p.user_id != member.id]
-            if remaining:
-                record.participants = remaining
-                if record.user_id == member.id:
-                    record.user_id = min(p.user_id for p in remaining)
-            else:
-                VerifiedCommunityRecordAudit.query.filter_by(record_id=record.id).delete(synchronize_session=False)
-                CommunityProfileHighlight.query.filter_by(record_id=record.id).delete(synchronize_session=False)
-                db.session.delete(record)
-        db.session.flush()
         PasswordResetCode.query.filter_by(user_id=member.id).delete(
             synchronize_session=False
         )
@@ -1938,78 +1834,6 @@ def create_app(test_config: dict[str, object] | None = None) -> Flask:
                       if has_capability(profile.user, Capability.ADULT_DIRECTORY)],
             selected_status=selected_status,
         )
-
-    @app.route("/admin/community/records", methods=["GET", "POST"])
-    @admin_required
-    def admin_community_records():
-        if request.method == "POST":
-            try:
-                explicit_members = "user_ids" in request.form
-                member_ids = set(int(value) for value in request.form.getlist(
-                    "user_ids" if explicit_members else "user_id"))
-                record_id = request.form.get("record_id", type=int)
-                title = request.form.get("title", "").strip()
-                kind = request.form.get("record_type", "")
-                occurred = date.fromisoformat(request.form.get("occurred_on", ""))
-                minutes = int(request.form.get("volunteer_minutes", "0")) if kind == "volunteer" else None
-                if not title or len(title) > 160 or kind not in {"activity", "volunteer"}:
-                    raise ValueError()
-                if occurred > date.today() or (minutes is not None and not 0 < minutes <= 600000):
-                    raise ValueError()
-                if not member_ids or len(member_ids) > 500 or User.query.filter(User.id.in_(member_ids)).count() != len(member_ids):
-                    raise ValueError()
-            except ValueError:
-                abort(400, description="Enter a valid member, summary, past date and activity type. Volunteer records require positive whole minutes.")
-            if request.form.get("record_id") and record_id is None:
-                abort(400)
-            record = db.session.get(VerifiedCommunityRecord, record_id) if record_id else None
-            if record_id and record is None:
-                abort(404)
-            if record and not explicit_members:
-                if member_ids != {record.user_id}:
-                    abort(400, description="Use the member list to change record participants.")
-                member_ids = {participant.user_id for participant in record.participants}
-            previous_members = {participant.user_id for participant in record.participants} if record else set()
-            if record is None:
-                record = VerifiedCommunityRecord(user_id=min(member_ids))
-                db.session.add(record)
-            record.user_id = min(member_ids)
-            for participant in list(record.participants):
-                if participant.user_id not in member_ids:
-                    record.participants.remove(participant)
-            existing_members = {participant.user_id for participant in record.participants}
-            for member_id in member_ids - existing_members:
-                record.participants.append(VerifiedCommunityRecordParticipant(user_id=member_id))
-            if previous_members - member_ids:
-                removed_profiles = select(CommunityProfile.id).where(
-                    CommunityProfile.user_id.in_(previous_members - member_ids))
-                CommunityProfileHighlight.query.filter_by(record_id=record.id).filter(
-                    CommunityProfileHighlight.profile_id.in_(removed_profiles)).delete(synchronize_session=False)
-            record.title, record.record_type = title, kind
-            record.occurred_on, record.volunteer_minutes = occurred, minutes
-            record.verified = True
-            record.shareable = request.form.get("shareable") == "yes"
-            record.sensitive = False
-            record.verified_by_id = g.current_user.id
-            record.verified_at = datetime.now(timezone.utc)
-            db.session.flush()
-            db.session.add(VerifiedCommunityRecordAudit(record_id=record.id, actor_id=g.current_user.id,
-                snapshot={"title": title, "type": kind, "date": occurred.isoformat(),
-                          "member_ids": sorted(member_ids), "previous_member_ids": sorted(previous_members),
-                          "volunteer_minutes": minutes, "verified": record.verified,
-                          "shareable": record.shareable, "sensitive": record.sensitive}))
-            db.session.commit()
-            flash("Verified record saved. Members choose whether to share eligible records.", "success")
-            return redirect(url_for("admin_community_records"))
-        page = request.args.get("page", 1, type=int)
-        if page < 1 or page > 10000:
-            abort(400)
-        records = VerifiedCommunityRecord.query.options(selectinload(VerifiedCommunityRecord.participants).selectinload(
-            VerifiedCommunityRecordParticipant.user)).order_by(
-            VerifiedCommunityRecord.id.desc()).offset((page - 1) * 20).limit(21).all()
-        members = User.query.order_by(User.full_name, User.id).all()
-        return render_template("admin_community_records.html", title="Verified community records",
-            records=records[:20], members=members, page=page, has_next=len(records) > 20)
 
     @app.post("/admin/community/profiles/<int:profile_id>/<action>")
     @admin_required

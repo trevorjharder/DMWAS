@@ -92,16 +92,6 @@
       </fieldset>
 
       <h2>Privacy controls</h2>
-      <fieldset class="form-options">
-        <legend>Verified activity and volunteer highlights</legend>
-        <p>Choose up to ten of your own verified records. Private, sensitive or revoked records cannot be shared.</p>
-        {% set chosen = request.form.getlist('highlights') if request.method == 'POST' else (profile.highlights|map(attribute='record_id')|map('string')|list if profile else []) %}
-        {% for record in highlight_records %}
-        <label class="check-label"><input type="checkbox" name="highlights" value="{{ record.id }}" {% if record.id|string in chosen %}checked{% endif %} />{{ record.title }} · {{ record.occurred_on }}{% if record.record_type == 'volunteer' %} · {{ record.volunteer_minutes }} minutes{% endif %}</label>
-        {% else %}<p>No shareable verified records yet. An administrator must verify a record before it is available here.</p>{% endfor %}
-        {% set highlights_checked = (request.form.get('show_highlights') == 'yes') if request.method == 'POST' else (profile.show_highlights if profile else false) %}
-        <label class="check-label"><input type="checkbox" name="show_highlights" value="yes" {% if highlights_checked %}checked{% endif %} />Show my selected verified highlights</label>
-      </fieldset>
       <p class="form-hint">
         Directory opt-in is off by default. Eligible adult members' opted-in
         profiles are automatically approved when saved. Each optional field

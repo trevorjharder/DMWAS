@@ -199,7 +199,6 @@
           %}
           >Profile review</a
         >
-        <a href="{{ url_for('admin_community_records') }}" {% if endpoint == 'admin_community_records' %}aria-current="page"{% endif %}>Verified records</a>
         {% if can_review_message_reports %}
         <a href="{{ url_for('messaging.reports') }}" {% if endpoint in ['messaging.reports', 'messaging.review_report'] %}aria-current="page"{% endif %}>Message reports</a>
         {% endif %}

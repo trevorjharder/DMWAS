@@ -57,7 +57,6 @@ switch off and on. Check that an approved public listing shows no private
 meeting details or participant identities.
 
 Keep the existing Phase 05 directory and profile workflow in the release
-candidate. If the full suite cannot import the verified-record or directory
-models, reconcile the Phase 05 application changes before release rather than
-stamping the database to a different revision. Record Testing acceptance and
+candidate. If the full suite cannot import the directory models, reconcile the
+Phase 05 application changes before release rather than stamping the database to a different revision. Record Testing acceptance and
 insurer and policy approval before enabling public member-organized listings.

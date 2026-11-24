@@ -6,8 +6,8 @@ Continues the existing uncommitted profile work after Phase 03. Profiles reuse
 the existing `User` primary key and the Phase 02 capability policy. Adult
 eligibility continues to use the recorded birth date (19+) and current membership
 term/payment, rather than a profile field. Existing public programs, membership
-applications and renewal records are preserved. Directory search, pagination and
-highlights remain disabled for Phase 05.
+applications and renewal records are preserved. Phase 05 adds directory search
+and pagination.
 
 ## Implemented behavior
 
@@ -128,4 +128,4 @@ reopening access, because backups can contain withdrawn profiles.
 
 Phase 04's automated feature gate is met by the passing full test suite;
 deployment acceptance remains subject to the staging and owner checks above.
-The next phase is Phase 05, Directory and Highlights; it is not implemented here.
+Phase 05 covers the member directory.

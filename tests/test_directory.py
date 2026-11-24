@@ -1,15 +1,16 @@
-"""Directory privacy, verified highlights, pagination and shared quota."""
+"""Directory privacy, pagination and shared quota."""
 from datetime import date, timedelta
 from urllib.parse import urlencode
 
 import pytest
-from sqlalchemy import event
+from flask_migrate import downgrade, upgrade
+from sqlalchemy import MetaData, event, inspect
 from sqlalchemy.dialects import postgresql
 
-from app import (CommunityProfile, CommunityProfileHighlight, DirectoryAccessWindow,
-    MembershipDetails, MembershipTerm, User, VerifiedCommunityRecord, VerifiedCommunityRecordAudit,
-    db, eligible_community_profiles)
-from app import VerifiedCommunityRecordParticipant, highlight_options
+from app import (
+    CommunityProfile, DirectoryAccessWindow, MembershipDetails, MembershipTerm, User,
+    create_app, db, eligible_community_profiles,
+)
 from tests.conftest import login_as
 
 
@@ -167,118 +168,6 @@ def test_directory_rate_limit_shared_across_clients_and_endpoints(client, app, d
     assert search(other).status_code == 200
 
 
-def record_payload(directory, **changes):
-    return {"csrf_token": "test-csrf-token", "user_id": str(directory["owner"]),
-            "title": "Verified trail work", "record_type": "volunteer", "occurred_on": "2026-01-01",
-            "volunteer_minutes": "90", "verified": "yes", "shareable": "yes", **changes}
-
-
-def test_admin_verification_member_selection_and_immediate_revocation(client, app, directory):
-    login_as(client, directory["viewer"])
-    assert client.get("/admin/community/records").status_code == 403
-    assert client.post("/admin/community/records", data=record_payload(directory)).status_code == 403
-    login_as(client, directory["admin"])
-    assert client.get("/admin/community/records").status_code == 200
-    assert client.post("/admin/community/records", data=record_payload(directory)).status_code == 302
-    with app.app_context():
-        record = VerifiedCommunityRecord.query.one()
-        record_id = record.id
-        assert VerifiedCommunityRecordAudit.query.one().actor_id == directory["admin"]
-    login_as(client, directory["owner"])
-    assert b"Verified trail work" in client.get("/member/profile/community/edit").data
-    payload = {"csrf_token": "test-csrf-token", "display_name": "Trail Alias", "directory_opt_in": "yes",
-               "show_highlights": "yes", "highlights": str(record_id)}
-    assert client.post("/member/profile", data=payload).status_code == 302
-    login_as(client, directory["viewer"])
-    response = client.get(f"/api/community/profiles/{directory['owner']}")
-    assert response.json["highlights"] == [{"title": "Verified trail work", "type": "volunteer",
-                                             "date": "2026-01-01", "volunteer_minutes": 90}]
-    assert b"Verified trail work" in client.get(f"/members/{directory['owner']}/profile").data
-    login_as(client, directory["admin"])
-    assert client.post("/admin/community/records", data=record_payload(directory, record_id=record_id,
-        shareable="")).status_code == 302
-    with app.app_context():
-        assert VerifiedCommunityRecordAudit.query.count() == 2
-    login_as(client, directory["viewer"])
-    assert client.get(f"/api/community/profiles/{directory['owner']}").json["highlights"] == []
-    assert b"Verified trail work" not in client.get(f"/members/{directory['owner']}/profile").data
-
-
-@pytest.mark.parametrize("invalid", ["other_owner", "private", "sensitive", "unverified"])
-def test_member_cannot_select_invalid_highlights_or_leak_stale_selection(client, app, directory, invalid):
-    with app.app_context():
-        record = VerifiedCommunityRecord(user_id=directory["viewer"] if invalid == "other_owner" else directory["owner"],
-            title="Never reveal this record", record_type="activity", occurred_on=date(2026, 1, 1),
-            verified=invalid != "unverified", shareable=invalid != "private", sensitive=invalid == "sensitive",
-            verified_by_id=directory["admin"])
-        db.session.add(record)
-        db.session.flush()
-        record_id = record.id
-        profile = db.session.get(CommunityProfile, directory["profile"])
-        profile.show_highlights = True
-        profile.highlights.append(CommunityProfileHighlight(record_id=record_id))
-        db.session.commit()
-    login_as(client, directory["owner"])
-    assert b"Never reveal this record" not in client.get("/member/profile/community/edit").data
-    assert client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Trail Alias",
-        "highlights": str(record_id), "show_highlights": "yes"}).status_code == 400
-    login_as(client, directory["viewer"])
-    assert client.get(f"/api/community/profiles/{directory['owner']}").json["highlights"] == []
-    assert b"Never reveal this record" not in client.get(f"/members/{directory['owner']}/profile").data
-
-
-def test_verified_records_are_private_by_default_and_cannot_change_owner(client, app, directory):
-    login_as(client, directory["admin"])
-    assert client.post("/admin/community/records", data=record_payload(directory, shareable="")).status_code == 302
-    with app.app_context():
-        record_id = VerifiedCommunityRecord.query.one().id
-    assert client.post("/admin/community/records", data=record_payload(directory,
-        record_id=record_id, user_id=directory["viewer"])).status_code == 400
-    assert client.post("/admin/community/records", data=record_payload(directory,
-        occurred_on="2999-01-01")).status_code == 400
-    assert client.post("/admin/community/records", data=record_payload(directory,
-        volunteer_minutes="-1")).status_code == 400
-    assert client.post("/admin/community/records", data={}).status_code == 400
-
-
-def test_profile_and_account_deletion_clean_up_highlight_data(client, app, directory):
-    login_as(client, directory["admin"])
-    client.post("/admin/community/records", data=record_payload(directory))
-    with app.app_context():
-        record_id = VerifiedCommunityRecord.query.one().id
-    login_as(client, directory["owner"])
-    client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Trail Alias",
-        "directory_opt_in": "yes", "highlights": str(record_id), "show_highlights": "yes"})
-    client.get("/members/search")
-    assert client.post("/member/profile/delete", data={"csrf_token": "test-csrf-token",
-        "confirm_delete": "yes"}).status_code == 302
-    with app.app_context():
-        assert CommunityProfileHighlight.query.count() == 0
-        assert VerifiedCommunityRecord.query.count() == 1
-        assert VerifiedCommunityRecordAudit.query.count() == 1
-    login_as(client, directory["admin"])
-    assert client.post(f"/admin/members/{directory['owner']}/delete", data={
-        "csrf_token": "test-csrf-token"}).status_code == 302
-    with app.app_context():
-        assert db.session.get(User, directory["owner"]) is None
-        assert VerifiedCommunityRecord.query.count() == 0
-        assert VerifiedCommunityRecordAudit.query.count() == 0
-        assert DirectoryAccessWindow.query.filter_by(user_id=directory["owner"]).count() == 0
-
-
-def test_selected_highlights_require_separate_visibility_choice(client, app, directory):
-    login_as(client, directory["admin"])
-    client.post("/admin/community/records", data=record_payload(directory))
-    with app.app_context():
-        record_id = VerifiedCommunityRecord.query.one().id
-    login_as(client, directory["owner"])
-    assert client.post("/member/profile", data={"csrf_token": "test-csrf-token",
-        "display_name": "Trail Alias", "directory_opt_in": "yes", "highlights": str(record_id)}).status_code == 302
-    login_as(client, directory["viewer"])
-    assert "highlights" not in client.get(f"/api/community/profiles/{directory['owner']}").json
-    assert b"Verified trail work" not in client.get(f"/members/{directory['owner']}/profile").data
-
-
 def test_postgres_directory_query_compiles_with_eligibility_in_sql(app):
     with app.app_context():
         sql = str(eligible_community_profiles().statement.compile(dialect=postgresql.dialect()))
@@ -286,120 +175,81 @@ def test_postgres_directory_query_compiles_with_eligibility_in_sql(app):
         assert "date_of_birth" in sql and "EXISTS" in sql
 
 
-def test_shared_record_is_one_entry_with_independent_member_highlights(client, app, directory):
-    login_as(client, directory["admin"])
-    payload = record_payload(directory)
-    payload.pop("user_id")
-    payload["user_ids"] = [str(directory["owner"]), str(directory["viewer"]), str(directory["owner"])]
-    assert client.post("/admin/community/records", data=payload).status_code == 302
-    with app.app_context():
-        record = VerifiedCommunityRecord.query.one()
-        record_id = record.id
-        assert VerifiedCommunityRecordParticipant.query.count() == 2
-        assert [r.id for r in highlight_options(directory["owner"])] == [record_id]
-        assert [r.id for r in highlight_options(directory["viewer"])] == [record_id]
-        assert highlight_options(directory["admin"]) == []
-        assert VerifiedCommunityRecordAudit.query.one().snapshot["member_ids"] == sorted(
-            [directory["owner"], directory["viewer"]])
-    for member_id in (directory["owner"], directory["viewer"]):
-        login_as(client, member_id)
-        assert client.post("/member/profile", data={"csrf_token": "test-csrf-token",
-            "display_name": "Shared activity member", "directory_opt_in": "yes", "show_highlights": "yes",
-            "highlights": str(record_id)}).status_code == 302
-    login_as(client, directory["admin"])
-    for member_id in (directory["owner"], directory["viewer"]):
-        detail = client.get(f"/api/community/profiles/{member_id}").json
-        assert len(detail["highlights"]) == 1
-        assert set(detail["highlights"][0]) == {"title", "date", "type", "volunteer_minutes"}
-    # One member opting out does not affect the other member's choice.
+def test_removed_highlights_are_unavailable_in_profiles_and_admin(client, directory):
     login_as(client, directory["owner"])
-    client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Private member"})
-    login_as(client, directory["admin"])
-    assert client.get(f"/api/community/profiles/{directory['owner']}").status_code == 404
-    assert len(client.get(f"/api/community/profiles/{directory['viewer']}").json["highlights"]) == 1
-    # Removing a participant clears only that member's selections.
-    payload.update(record_id=record_id, user_ids=[str(directory["owner"])])
-    assert client.post("/admin/community/records", data=payload).status_code == 302
-    assert client.get(f"/api/community/profiles/{directory['viewer']}").json["highlights"] == []
-    with app.app_context():
-        assert highlight_options(directory["viewer"]) == []
-        assert CommunityProfileHighlight.query.count() == 0
+    editor = "/member/profile/community/edit"
+    form = client.get(editor)
+    assert form.status_code == 200
+    assert b'name="show_highlights"' not in form.data
+    assert client.post(editor, data={
+        "csrf_token": "test-csrf-token", "display_name": "Trail Alias", "directory_opt_in": "yes",
+        "highlights": "obsolete", "show_highlights": "yes",
+    }).status_code == 302
+    assert b"Verified highlights" not in client.get("/member/profile/preview").data
 
-
-def test_deleting_primary_member_preserves_shared_record_for_others(client, app, directory):
-    login_as(client, directory["admin"])
-    payload = record_payload(directory)
-    payload.pop("user_id")
-    payload["user_ids"] = [str(directory["owner"]), str(directory["viewer"])]
-    client.post("/admin/community/records", data=payload)
-    with app.app_context():
-        record_id = VerifiedCommunityRecord.query.one().id
     login_as(client, directory["viewer"])
-    client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Remaining member",
-        "directory_opt_in": "yes", "show_highlights": "yes", "highlights": str(record_id)})
+    profile = client.get(f"/api/community/profiles/{directory['owner']}")
+    assert profile.json == {"display_name": "Trail Alias"}
+
     login_as(client, directory["admin"])
-    assert client.post(f"/admin/members/{directory['owner']}/delete", data={
-        "csrf_token": "test-csrf-token"}).status_code == 302
+    assert client.get("/admin/community/records").status_code == 404
+    assert client.post("/admin/community/records", data={"csrf_token": "test-csrf-token"}).status_code == 404
+
+
+def test_migration_erases_highlight_records_and_preserves_profiles(tmp_path, make_user):
+    url = f"sqlite:///{tmp_path.as_posix()}/db.sqlite"
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": url})
+    previous_revision = "b08e5f6a7b8c"
+    removed_tables = {
+        "verified_community_record", "verified_community_record_participant",
+        "verified_community_record_audit", "community_profile_highlight",
+    }
     with app.app_context():
-        record = db.session.get(VerifiedCommunityRecord, record_id)
-        assert record.user_id == directory["viewer"]
-        assert [participant.user_id for participant in record.participants] == [directory["viewer"]]
-        assert VerifiedCommunityRecordAudit.query.count() == 1
-    assert len(client.get(f"/api/community/profiles/{directory['viewer']}").json["highlights"]) == 1
-
-
-@pytest.mark.parametrize("member_ids", [[], ["invalid"], ["999999999"]])
-def test_shared_record_invalid_member_lists_are_atomic(client, app, directory, member_ids):
-    login_as(client, directory["admin"])
-    payload = record_payload(directory)
-    payload.pop("user_id")
-    payload["user_ids"] = member_ids
-    assert client.post("/admin/community/records", data=payload).status_code == 400
-    with app.app_context():
-        assert VerifiedCommunityRecord.query.count() == 0
-        assert VerifiedCommunityRecordParticipant.query.count() == 0
-
-
-def test_single_sharing_control_preserves_legacy_privacy(client, app, directory):
-    with app.app_context():
-        record = VerifiedCommunityRecord(user_id=directory["owner"], title="Legacy hidden record",
-            record_type="activity", occurred_on=date(2026, 1, 1), verified=True,
-            shareable=True, sensitive=True, verified_by_id=directory["admin"])
-        db.session.add(record)
+        upgrade(revision=previous_revision)
+        user = make_user(is_admin=True)
+        profile = CommunityProfile(display_name="Trail Alias", user=user, directory_opt_in=True)
+        db.session.add(profile)
+        db.session.flush()
+        profile_id, user_id = profile.id, user.id
+        schema = MetaData()
+        schema.reflect(bind=db.engine, only=[*removed_tables, "community_profile"])
+        tables = schema.tables
+        db.session.execute(tables["community_profile"].update()
+                           .where(tables["community_profile"].c.id == profile_id)
+                           .values(show_highlights=True))
+        db.session.execute(tables["verified_community_record"].insert().values(
+            id=1, user_id=user_id, title="Past volunteer work", record_type="volunteer",
+            occurred_on=date(2026, 1, 1), volunteer_minutes=60, verified=True, shareable=True,
+            sensitive=False, verified_by_id=user_id, verified_at=date(2026, 1, 2),
+        ))
+        db.session.execute(tables["verified_community_record_participant"].insert().values(
+            record_id=1, user_id=user_id,
+        ))
+        db.session.execute(tables["verified_community_record_audit"].insert().values(
+            record_id=1, actor_id=user_id, snapshot={"title": "Past volunteer work"},
+            created_at=date(2026, 1, 2),
+        ))
+        db.session.execute(tables["community_profile_highlight"].insert().values(
+            profile_id=profile_id, record_id=1,
+        ))
         db.session.commit()
-        record_id = record.id
-    login_as(client, directory["admin"])
-    page = client.get("/admin/community/records")
-    assert b"Allow members to share this activity" in page.data
-    assert b'name="verified"' not in page.data
-    assert b'name="sensitive"' not in page.data
-    assert b'name="shareable" value="yes" checked' not in page.data
-    payload = record_payload(directory, record_id=record_id, shareable="")
-    assert client.post("/admin/community/records", data=payload).status_code == 302
-    with app.app_context():
-        record = db.session.get(VerifiedCommunityRecord, record_id)
-        assert record.verified and not record.shareable
-        assert highlight_options(directory["owner"]) == []
-    payload["shareable"] = "yes"
-    assert client.post("/admin/community/records", data=payload).status_code == 302
-    with app.app_context():
-        record = db.session.get(VerifiedCommunityRecord, record_id)
-        assert record.verified and record.shareable and not record.sensitive
-        assert len(highlight_options(directory["owner"])) == 1
+        db.session.remove()
 
+        upgrade()
+        inspector = inspect(db.engine)
+        assert removed_tables.isdisjoint(inspector.get_table_names())
+        assert "show_highlights" not in {column["name"] for column in inspector.get_columns("community_profile")}
+        assert inspector.has_table("directory_access_window")
+        assert inspector.has_table("activity_volunteer_hours")
+        profile = db.session.get(CommunityProfile, profile_id)
+        assert profile.display_name == "Trail Alias"
+        assert profile.directory_opt_in
+        db.session.remove()
 
-def test_verified_highlights_follow_goals_in_profile_and_preview(client, app, directory):
-    login_as(client, directory["admin"])
-    client.post("/admin/community/records", data=record_payload(directory))
-    with app.app_context():
-        record_id = VerifiedCommunityRecord.query.one().id
-    login_as(client, directory["owner"])
-    client.post("/member/profile", data={"csrf_token": "test-csrf-token", "display_name": "Trail Alias",
-        "directory_opt_in": "yes", "show_highlights": "yes", "highlights": str(record_id),
-        "show_goals": "yes", "participation_goals": "Join Society activities"})
-    for path in ("/member/profile/preview", f"/members/{directory['owner']}/profile"):
-        page = client.get(path)
-        assert page.status_code == 200
-        assert page.data.index(b"Participation goals") < page.data.index(b"Verified highlights")
-        assert b"adult directory" not in page.data.lower()
-    assert b"adult member directory" not in client.get("/members/search").data.lower()
+        downgrade(revision=previous_revision)
+        with db.engine.connect() as connection:
+            for name in removed_tables:
+                assert connection.execute(tables[name].select()).all() == []
+            assert connection.execute(tables["community_profile"].select()
+                                      .where(tables["community_profile"].c.id == profile_id)
+                                      ).one().show_highlights is False
